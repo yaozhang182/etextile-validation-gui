@@ -1,0 +1,41 @@
+# Source archive of the example data. Its contents are already unpacked into
+# input_data/examples_data/, and at ~510 MB it exceeds GitHub's 100 MB per-file
+# hard limit — pushing it would be rejected.
+example_data.zip
+
+# Joint angles cached next to each video by the Data Import tab. Derived data,
+# and shipping it would let a demo skip the most expensive pipeline stage.
+*.angles.npz
+
+# The original heavy SMPL reference project: 42 GB, reference only, not used at
+# runtime. external/data_collection/ IS tracked — those are the recording
+# scripts the paper refers to.
+external/BodyPoseEstimation/
+
+# Machine-local Claude Code permissions (contains local paths)
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+.Python
+venv/
+.venv/
+
+# PyInstaller output
+build/
+dist/
+*.manifest
+
+# Benchmark results are machine-specific
+benchmarks/results_*.json
+
+# LaTeX build artifacts (main.pdf is kept intentionally)
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.synctex.gz
+
+# OS
+.DS_Store
+__MACOSX/

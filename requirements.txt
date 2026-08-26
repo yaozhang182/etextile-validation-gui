@@ -1,0 +1,23 @@
+# Core
+numpy
+scipy
+pandas
+pyyaml
+
+# ML
+# NOTE: install torch from the CPU-only wheel index. The default wheel bundles
+# CUDA (~1.2 GB) and this toolchain trains on CPU by design:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch
+scikit-learn
+
+# Pose estimation (CPU, lightweight)
+mediapipe==0.10.14
+opencv-python
+
+# Visualization
+matplotlib
+seaborn
+
+# GUI
+PyQt6

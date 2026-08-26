@@ -1,0 +1,35 @@
+# E-Textile Validation GUI - Default Configuration
+
+# Target joint angles for ML prediction
+# These are the angle columns the model will predict from sensor data.
+# Available angles (computed from SMPL): pelvis (3), hip L/R (3 each),
+#   knee L/R (1 each), ankle L/R (1 each), lumbar (3),
+#   shoulder L/R (3 each), elbow L/R (1 each), neck (2)
+# Default: left shoulder (typical e-textile use case)
+target_cols:
+  - "flexion"
+  - "abduction"
+  - "rotation"
+
+# Hyperparameters
+sequence_length: 40    # Temporal window size (~1s at 40Hz)
+batch_size: 32
+learning_rate: 0.001
+epochs: 50
+dropout: 0.1
+
+# Model architecture
+model_type: "hybrid_cnn_lstm"  # Options: "hybrid_cnn_lstm", "simple_cnn"
+cnn_filters: 32
+lstm_hidden: 64
+
+# Data processing
+# "upsample_sensor"    interpolate the sensor stream onto the per-frame video
+#                      timestamps (ground truth is defined per frame)
+# "downsample_labels"  interpolate joint angles onto the sensor timestamps
+alignment_method: "upsample_sensor"
+
+# Visualization
+plot_error_heatmap: true
+plot_sensor_importance: true
+plot_prediction_curves: true

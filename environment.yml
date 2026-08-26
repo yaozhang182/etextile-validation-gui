@@ -1,0 +1,22 @@
+name: etextile
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    # Core
+    - numpy
+    - scipy
+    - pandas
+    - pyyaml
+    # ML
+    - torch
+    - scikit-learn
+    # Pose estimation (CPU, lightweight)
+    - mediapipe==0.10.14
+    - opencv-python
+    # Visualization
+    - matplotlib
+    - seaborn
