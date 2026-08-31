@@ -41,6 +41,8 @@ class SkeletonViewerPanel(QWidget):
         super().__init__()
         self.state = state
         self._playing = False
+        self._cap = None
+        self._cap_path = None
         self._timer = QTimer()
         self._timer.timeout.connect(self._advance_frame)
         self._init_ui()
@@ -111,6 +113,10 @@ class SkeletonViewerPanel(QWidget):
         self._populate_subjects()
 
     def _on_subject_changed(self):
+        if getattr(self, '_cap', None) is not None:
+            self._cap.release()
+            self._cap = None
+            self._cap_path = None
         subject = self._current_subject()
         if subject is not None and subject.get('skeleton') is not None:
             self.frame_slider.setMaximum(max(subject['skeleton']['total_frames'] - 1, 0))
@@ -239,6 +245,33 @@ class SkeletonViewerPanel(QWidget):
         else:
             self._toggle_play()
 
+    def _draw_video_frame(self, subject, frame_idx):
+        """
+        Show one video frame, reusing the open file handle.
+
+        Reopening a multi-hundred-megabyte MP4 on every slider step makes
+        scrubbing crawl, which reads as the window hanging.
+        """
+        self.ax_video.clear()
+        video_path = subject.get('video_path') if subject else None
+        if video_path:
+            try:
+                import cv2
+                if getattr(self, '_cap_path', None) != video_path:
+                    if getattr(self, '_cap', None) is not None:
+                        self._cap.release()
+                    self._cap = cv2.VideoCapture(video_path)
+                    self._cap_path = video_path
+                if self._cap is not None and self._cap.isOpened():
+                    self._cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                    ok, frame = self._cap.read()
+                    if ok:
+                        self.ax_video.imshow(frame[:, :, ::-1])
+            except Exception:
+                pass    # a missing or unreadable video must not break the tab
+        self.ax_video.set_title(f"Video Frame {frame_idx}")
+        self.ax_video.axis('off')
+
     def _joint_confidence(self, skeleton):
         """(T, 22) confidence for the current skeleton, cached per subject."""
         visibility = skeleton.get('visibility') if skeleton else None
@@ -258,28 +291,31 @@ class SkeletonViewerPanel(QWidget):
             return
 
         frame_idx = self.frame_slider.value()
-        total = skeleton['total_frames']
+        total = skeleton.get('total_frames', 0)
         self.frame_label.setText(f"Frame: {frame_idx} / {total}")
 
-        smplh = skeleton['smplh_joints']  # (T, 22, 3)
+        # A subject restored from a cache written before 3D joints were stored
+        # has angles but no skeleton geometry. Say so instead of raising — an
+        # exception here propagates out of a Qt slot and kills the app.
+        smplh = skeleton.get('smplh_joints')
+        if smplh is None:
+            self._draw_video_frame(subject, frame_idx)
+            self.ax_skeleton.clear()
+            self.ax_skeleton.set_axis_off()
+            self.ax_skeleton.text2D(
+                0.5, 0.5,
+                "3D skeleton not in this cache.\n\n"
+                "Press 'Extract Skeleton & Compute Angles' in Tab 1\n"
+                "to compute it. Joint angles, training and results\n"
+                "all work without it.",
+                transform=self.ax_skeleton.transAxes,
+                ha='center', va='center', fontsize=10, color='#666',
+            )
+            self.fig.tight_layout()
+            self.canvas.draw()
+            return
 
-        # Draw video frame
-        self.ax_video.clear()
-        video_path = subject.get('video_path')
-        if video_path:
-            try:
-                import cv2
-                cap = cv2.VideoCapture(video_path)
-                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-                ok, frame = cap.read()
-                cap.release()
-                if ok:
-                    frame_rgb = frame[:, :, ::-1]
-                    self.ax_video.imshow(frame_rgb)
-            except Exception:
-                pass
-        self.ax_video.set_title(f"Video Frame {frame_idx}")
-        self.ax_video.axis('off')
+        self._draw_video_frame(subject, frame_idx)
 
         # Draw 3D skeleton
         # SMPL convention: X=left/right, Y=up, Z=forward

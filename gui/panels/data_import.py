@@ -55,6 +55,24 @@ def angle_cache_path(video_path):
     return Path(video_path).with_suffix('.angles.npz')
 
 
+def cache_description(video_path):
+    """
+    What a existing cache can restore, so the user knows what to expect.
+
+    Caches written before 3D joints were stored still give angles, training and
+    results — only the Skeleton Viewer needs a re-extraction.
+    """
+    try:
+        with np.load(angle_cache_path(video_path), allow_pickle=True) as data:
+            if '__smplh__' in data.files:
+                return "Cached angles and 3D skeleton found — extraction will be skipped."
+            return ("Cached angles found (no 3D skeleton in this older cache). "
+                    "Everything works except the Skeleton Viewer; re-extract to "
+                    "restore it.")
+    except Exception:
+        return "A cache file exists but could not be read; it will be re-extracted."
+
+
 class SkeletonWorker(QThread):
     """Background thread for skeleton extraction of a single subject."""
     progress = pyqtSignal(int, int)  # frame_idx, total
@@ -144,7 +162,7 @@ class AddSubjectDialog(QDialog):
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(complete)
 
         if complete and angle_cache_path(self.video_edit.text()).exists():
-            self.hint.setText("Cached joint angles found — extraction will be skipped.")
+            self.hint.setText(cache_description(self.video_edit.text()))
         elif not complete:
             self.hint.setText("All three files are required.")
         else:
@@ -280,7 +298,7 @@ class DataImportPanel(QWidget):
         cache = angle_cache_path(subject['video_path'])
         if not cache.exists():
             return
-        reserved = {'__meta__', '__visibility__'}
+        reserved = {'__meta__', '__visibility__', '__smplh__'}
         try:
             with np.load(cache, allow_pickle=True) as data:
                 angles = {k: data[k] for k in data.files if k not in reserved}
@@ -291,16 +309,17 @@ class DataImportPanel(QWidget):
                 fps = float(data['__meta__'][0]) if '__meta__' in data.files else 30.0
                 subject['time'] = np.arange(n) / (fps or 30.0)
 
-                # Enough of a skeleton record for the Tracking Quality view to
-                # work without re-running MediaPipe. 3D joints are not cached,
-                # so the Skeleton Viewer still needs a real extraction.
+                # Rebuild the skeleton record. Caches written before 3D joints
+                # were stored contain no '__smplh__'; the Skeleton Viewer detects
+                # the missing key and says so rather than failing.
+                skeleton = {'fps': fps, 'total_frames': n, 'valid_frames': n}
                 if '__visibility__' in data.files:
-                    subject['skeleton'] = {
-                        'visibility': data['__visibility__'],
-                        'fps': fps,
-                        'total_frames': n,
-                        'valid_frames': n,
-                    }
+                    skeleton['visibility'] = data['__visibility__']
+                if '__smplh__' in data.files:
+                    joints = data['__smplh__']
+                    skeleton['smplh_joints'] = joints
+                    skeleton['total_frames'] = int(len(joints))
+                subject['skeleton'] = skeleton
                 subject['status'] = 'ready'
         except Exception:
             pass  # Corrupt cache is not fatal — just re-extract.
@@ -455,6 +474,13 @@ class DataImportPanel(QWidget):
             extra = {}
             if result.get('visibility') is not None:
                 extra['__visibility__'] = result['visibility']
+            # Cache the 3D joints as well, otherwise the Skeleton Viewer has
+            # nothing to draw when a subject is restored from cache. (T, 22, 3)
+            # float32 is ~0.8 MB for a two-minute recording — cheap next to
+            # re-running MediaPipe over every frame.
+            if result.get('smplh_joints') is not None:
+                extra['__smplh__'] = np.asarray(result['smplh_joints'],
+                                                dtype=np.float32)
             np.savez_compressed(
                 angle_cache_path(subject['video_path']),
                 __meta__=np.array([result['fps']]), **extra, **angles,

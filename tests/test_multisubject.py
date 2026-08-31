@@ -257,6 +257,73 @@ def test_fps_estimation_degrades_safely():
     assert estimate_fps_from_frames(absurd, fallback=25.0) == 25.0
 
 
+def _write_cache(with_joints, n=200):
+    """Build a subject whose angles come from a cache file, as after re-opening."""
+    from gui.panels.data_import import angle_cache_path
+    d = tempfile.mkdtemp()
+    video = os.path.join(d, 'video.mp4')
+    open(video, 'wb').close()
+    angles = {'right_shoulder_flexion': np.sin(np.arange(n) / 30.) * 60,
+              'right_elbow_flexion': np.cos(np.arange(n) / 25.) * 45}
+    extra = {'__visibility__': np.ones((n, 33), dtype=np.float32)}
+    if with_joints:
+        extra['__smplh__'] = np.random.rand(n, 22, 3).astype(np.float32)
+    np.savez_compressed(angle_cache_path(video), __meta__=np.array([30.0]),
+                        **extra, **angles)
+    return video
+
+
+def test_cache_without_joints_does_not_kill_the_skeleton_viewer():
+    """
+    Regression: caches written before 3D joints were stored produce a skeleton
+    dict with no 'smplh_joints'. Tab 2 indexed it directly, and the resulting
+    KeyError propagated out of a Qt slot, which takes the whole app down.
+    """
+    w = MainWindow()
+    subject = make_subject('S1', _write_cache(with_joints=False),
+                           '/tmp/s.csv', '/tmp/f.csv')
+    w.state['train_subjects'].append(subject)
+    w.tab_import._load_cached_angles(subject)
+
+    assert subject['status'] == 'ready'
+    assert 'smplh_joints' not in subject['skeleton']
+
+    w.tab_skeleton.refresh()               # switching to Tab 2 must not raise
+    w.tab_skeleton.frame_slider.setValue(10)
+    w.tab_skeleton._update_plot()
+
+
+def test_cache_round_trips_the_3d_joints():
+    """A fresh cache carries the geometry, so the viewer works without re-extraction."""
+    w = MainWindow()
+    subject = make_subject('S1', _write_cache(with_joints=True, n=200),
+                           '/tmp/s.csv', '/tmp/f.csv')
+    w.state['train_subjects'].append(subject)
+    w.tab_import._load_cached_angles(subject)
+
+    joints = subject['skeleton'].get('smplh_joints')
+    assert joints is not None and joints.shape == (200, 22, 3)
+    assert subject['skeleton']['total_frames'] == 200
+    assert set(subject['angles']) == {'right_shoulder_flexion', 'right_elbow_flexion'}, \
+        "reserved keys must not leak into the angle channels"
+
+    w.tab_skeleton.refresh()
+    w.tab_skeleton.frame_slider.setValue(10)
+    w.tab_skeleton._update_plot()
+
+
+def test_extraction_result_supplies_everything_the_cache_needs():
+    """
+    Guards the write side: whatever extract_skeleton_from_video returns must
+    contain the keys _load_cached_angles expects to find again.
+    """
+    import inspect
+    from core import smpl_extraction
+    src = inspect.getsource(smpl_extraction.extract_skeleton_from_video)
+    for key in ("'smplh_joints'", "'visibility'", "'fps'"):
+        assert key in src, f"extraction no longer produces {key}"
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith('test_')]
     failed = 0
