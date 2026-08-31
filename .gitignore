@@ -36,6 +36,9 @@ paper/*.log
 paper/*.out
 paper/*.synctex.gz
 
+# Screenshots and other files dropped into the project root ad hoc
+/*.png
+
 # OS
 .DS_Store
 __MACOSX/
