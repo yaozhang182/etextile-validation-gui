@@ -58,8 +58,13 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[
         # Never imported by this app; each pulls in a large dependency tree.
+        # NOTE: do NOT exclude submodules of torch itself. torch/__init__.py
+        # imports several of them eagerly (distributions, fx, jit, ...), so
+        # dropping one makes `import torch` fail with
+        #   cannot import name '<sub>' from partially initialized module 'torch'
+        # torchvision/torchaudio are separate top-level packages and are safe.
         'tkinter', 'PyQt5', 'PySide2', 'PySide6', 'IPython', 'jupyter',
-        'notebook', 'pytest', 'torch.distributions', 'torchvision', 'torchaudio',
+        'notebook', 'pytest', 'torchvision', 'torchaudio',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

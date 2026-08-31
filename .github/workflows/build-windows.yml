@@ -48,12 +48,16 @@ jobs:
             exit 1
           fi
 
-      - name: Smoke-test the executable
+      - name: Self-test the packaged executable
         shell: bash
         run: |
-          # Launch briefly to catch missing DLLs. No display on the runner, so a
-          # clean start-then-exit is the most we can check automatically.
-          ./dist/ETextileValidation/ETextileValidation.exe --version || true
+          # Runs against the BUILT binary, not the source tree: imports every
+          # heavy dependency, loads MediaPipe's model assets, and performs one
+          # real training + evaluation step. A build can otherwise succeed and
+          # still be dead on first use — v0.2.0 shipped with a pruned torch
+          # submodule and crashed the moment the user pressed Start Training.
+          # No "|| true" here: this failing must fail the build.
+          ./dist/ETextileValidation/ETextileValidation.exe --selftest
 
       - name: Package
         shell: bash
