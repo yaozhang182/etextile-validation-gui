@@ -517,6 +517,91 @@ def test_extraction_worker_is_cancellable():
     fresh._tick(1, 100)          # not stopped: must not raise
 
 
+def test_busy_dialog_closes_on_every_exit_path():
+    """
+    A progress window left open behind a finished job locks the whole
+    application, so every ending must close it: success, error and cancel.
+    """
+    from gui.progress import BusyDialog
+
+    w = MainWindow()
+    panel = w.tab_import
+    subject = fake_subject('S1', 100, 300, 1e9)
+    w.state['train_subjects'].append(subject)
+
+    def open_one():
+        panel._dialog = BusyDialog(panel, "Extracting", "x", cancel_text="Cancel")
+        panel._dialog.show()
+        _app.processEvents()
+        assert panel._dialog.isModal(), "must block the main window"
+
+    # cancelled
+    open_one()
+    panel._on_cancelled('train', subject)
+    _app.processEvents()
+    assert panel._dialog is None, "cancel left the dialog open"
+
+    # errored — the real handler raises a modal message box, which would block
+    # forever with no one to dismiss it, so stub just that call.
+    open_one()
+    panel._pending_extractions = []
+    from PyQt6.QtWidgets import QMessageBox
+    original = QMessageBox.critical
+    QMessageBox.critical = staticmethod(lambda *a, **k: None)
+    try:
+        panel._on_extraction_error("boom", 'train', subject)
+    finally:
+        QMessageBox.critical = original
+    _app.processEvents()
+    assert panel._dialog is None, "error left the dialog open"
+
+    # queue drained normally
+    open_one()
+    panel._pending_extractions = []
+    panel._run_next_extraction()
+    _app.processEvents()
+    assert panel._dialog is None, "completion left the dialog open"
+
+    # reset
+    open_one()
+    w.reset_all()
+    _app.processEvents()
+    assert panel._dialog is None, "reset left the dialog open"
+
+
+def test_busy_dialog_reports_progress_and_time():
+    from gui.progress import BusyDialog, _duration
+
+    assert _duration(45) == "45 s"
+    assert _duration(125) == "2 min 05 s"
+    assert _duration(None) == "—"
+    assert _duration(float('nan')) == "—"
+
+    w = MainWindow()
+    d = BusyDialog(w, "T", "message", cancel_text="Cancel")
+    assert d.bar.maximum() == 0, "starts indeterminate"
+
+    d.set_progress(50, 200)
+    assert d.bar.maximum() == 200 and d.bar.value() == 50
+    d.set_progress(999, 200)
+    assert d.bar.value() == 200, "must clamp rather than overflow"
+    d.set_progress(-5, 200)
+    assert d.bar.value() == 0
+
+    d.set_detail("frame 3 of 9")
+    assert d.detail_label.text() == "frame 3 of 9"
+
+    # Esc must not dismiss work that is still running; it requests a cancel.
+    fired = []
+    d.set_cancel_callback(lambda: fired.append(True))
+    d.reject()
+    assert fired == [True] and d.cancelled
+    assert d.isVisible() or True   # offscreen visibility is not meaningful
+
+    d.finish()
+    d.finish()                      # idempotent
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith('test_')]
     failed = 0

@@ -179,8 +179,11 @@ participant, 10 channels):
    `session_1`, `session_2`, `session_4`. Then once under *Test Subjects* for
    `session_3`.
 2. Click **Extract Skeleton & Compute Angles**. This is the slow step — roughly
-   0.1 s per video frame, so about 8 minutes for all four sessions. Results are
-   cached, so you only pay this once per recording.
+   0.1 s per video frame, so about 8 minutes for all four sessions. A progress
+   window shows which session is being processed, how far through it is and
+   roughly how long is left; it blocks the rest of the window so nothing is
+   changed underneath a running job, and **Cancel** stops it. Results are cached,
+   so you only pay this once per recording.
 3. **Tab 2** → drag the timeline. Check the skeleton follows the body. Click
    **Tracking Quality** to see which joints were tracked worst.
 4. **Tab 3** → tick the joint angles you want to predict (try the three
@@ -424,7 +427,7 @@ assumption on top of whatever the tracking confidence says.
 | **Sequence Length** | frames of history per prediction | 40 | lower for short recordings — a session shorter than this contributes nothing |
 | **Batch Size** | samples per step | 32 | rarely needs changing |
 | **Time Alignment** | which clock to resample onto | Align to video frames | leave it; the alternative aligns to sensor samples and yields fewer points |
-| **Start Training** | trains, then evaluates on the test sessions | | |
+| **Start Training** | trains, then evaluates on the test sessions; a progress window shows the epoch, the current loss and an estimate of the time left | | |
 | **Stop** | interrupts training | | |
 | Loss curve | training error per epoch | | should fall and flatten |
 | Log pane | per-session sample counts, model size, per-subject results | | check each session contributed samples |

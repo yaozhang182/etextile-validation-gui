@@ -19,6 +19,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
 from gui.state import make_subject, get_subjects, next_subject_id
 from gui import help as help_ui, icons
+from gui.progress import BusyDialog
 
 VIDEO_FILTER = "Video (*.mp4 *.avi *.mov)"
 CSV_FILTER = "CSV (*.csv)"
@@ -49,6 +50,18 @@ def short_path(path):
     """
     p = Path(path)
     return f"{p.parent.name}/{p.name}" if p.parent.name else p.name
+
+
+def _frame_count(video_path):
+    """Frames in a video, or 0 if it cannot be read. Used to size the progress bar."""
+    try:
+        import cv2
+        cap = cv2.VideoCapture(str(video_path))
+        n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap.release()
+        return max(n, 0)
+    except Exception:
+        return 0
 
 
 def angle_cache_path(video_path):
@@ -244,6 +257,9 @@ class DataImportPanel(QWidget):
         self.state = state
         self._workers = []
         self._pending_extractions = []
+        self._dialog = None
+        self._queue_total = self._queue_done = 0
+        self._queue_size = self._queue_index = 0
         self.tables = {}
         self._init_ui()
 
@@ -491,16 +507,49 @@ class DataImportPanel(QWidget):
         self.extract_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
         self._pending_extractions = pending
+
+        # Total frames across the queue, so the bar tracks the whole job rather
+        # than restarting ateach subject. Falls back to per-subject if a video
+        # will not report a frame count.
+        self._queue_total = 0
+        self._queue_done = 0
+        for _, subject in pending:
+            self._queue_total += _frame_count(subject['video_path'])
+        self._queue_size = len(pending)
+        self._queue_index = 0
+
+        self._dialog = BusyDialog(
+            self, "Extracting", "Computing joint angles from video",
+            cancel_text="Cancel")
+        self._dialog.set_cancel_callback(self._cancel_from_dialog)
+        self._dialog.show()
+
         self._run_next_extraction()
+
+    def _cancel_from_dialog(self):
+        """Cancel requested from the progress window."""
+        self._pending_extractions = []
+        for worker in self._workers:
+            if worker.isRunning():
+                worker.stop()
+
+    def _close_dialog(self):
+        """Close the progress window on whatever path the job ended by."""
+        dialog = getattr(self, '_dialog', None)
+        if dialog is not None:
+            dialog.finish()
+            self._dialog = None
 
     def _run_next_extraction(self):
         if not self._pending_extractions:
+            self._close_dialog()
             self.extract_btn.setEnabled(True)
             self.progress_bar.setVisible(False)
             self.progress_label.setText("Done! Switch to Tab 2 or 3 to view results.")
             return
 
         split, subject = self._pending_extractions.pop(0)
+        self._queue_index += 1
         subject['status'] = 'extracting'
         self._refresh_table(split)
         self.progress_label.setText(f"[{split}/{subject['id']}] extracting skeleton...")
@@ -519,8 +568,22 @@ class DataImportPanel(QWidget):
         self.progress_label.setText(
             f"[{split}/{subject['id']}] frame {frame}/{total}..."
         )
+        dialog = getattr(self, '_dialog', None)
+        if dialog is not None:
+            dialog.set_message(
+                f"Computing joint angles — subject {self._queue_index} "
+                f"of {self._queue_size}"
+            )
+            dialog.set_detail(
+                f"{split} / {subject['id']}: frame {frame} of {total}"
+            )
+            if self._queue_total:
+                dialog.set_progress(self._queue_done + frame, self._queue_total)
+            else:
+                dialog.set_progress(frame, total)
 
     def _on_extraction_done(self, result, split, subject):
+        self._queue_done += _frame_count(subject['video_path'])
         from core.joint_angles import extract_all_joint_angles
         from core.data_alignment import estimate_fps_from_frames
 
@@ -587,11 +650,19 @@ class DataImportPanel(QWidget):
         self._run_next_extraction()
 
     def _on_extraction_error(self, msg, split, subject):
+        self._queue_done += _frame_count(subject['video_path'])
+        self._close_dialog()          # let the user see the message box
         subject['status'] = 'error'
         subject['error'] = msg
         self._refresh_table(split)
         self.preview.append(f"[{split}/{subject['id']}] ERROR: {msg}")
         QMessageBox.critical(self, "Extraction Error", f"[{subject['id']}] {msg}")
+        if self._pending_extractions:
+            self._dialog = BusyDialog(
+                self, "Extracting", "Computing joint angles from video",
+                cancel_text="Cancel")
+            self._dialog.set_cancel_callback(self._cancel_from_dialog)
+            self._dialog.show()
         self._run_next_extraction()
 
     def _on_cancelled(self, split, subject):
@@ -599,6 +670,10 @@ class DataImportPanel(QWidget):
         if subject.get('status') == 'extracting':
             subject['status'] = 'pending'
         self._refresh_table(split)
+        self._close_dialog()
+        self.extract_btn.setEnabled(True)
+        self.progress_bar.setVisible(False)
+        self.progress_label.setText("Extraction cancelled.")
 
     def is_busy(self):
         """True while any extraction thread is still running."""
@@ -606,6 +681,7 @@ class DataImportPanel(QWidget):
 
     def cancel_all(self):
         """Ask every running extraction to stop, and drop the queue."""
+        self._close_dialog()
         self._pending_extractions = []
         for worker in self._workers:
             if worker.isRunning():

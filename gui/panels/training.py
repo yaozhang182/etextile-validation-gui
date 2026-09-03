@@ -18,6 +18,7 @@ from matplotlib.figure import Figure
 
 from gui.state import ready_subjects
 from gui import help as help_ui, icons
+from gui.progress import BusyDialog
 
 # Label -> value for the alignment dropdown. 'upsample_sensor' interpolates the
 # sensor stream onto the per-frame video timestamps, which is what the ground
@@ -70,6 +71,7 @@ class TrainingPanel(QWidget):
         super().__init__()
         self.state = state
         self._worker = None
+        self._dialog = None
         self._test_parts = []
         self._losses = []
         self._init_ui()
@@ -185,6 +187,7 @@ class TrainingPanel(QWidget):
 
     def cancel(self):
         """Stop training and wait for the thread to unwind."""
+        self._close_dialog()
         if self._worker is not None and self._worker.isRunning():
             self._worker.stop()
             self._worker.wait(10000)
@@ -365,6 +368,14 @@ class TrainingPanel(QWidget):
             self.progress_bar.setVisible(True)
             self.progress_bar.setMaximum(config['epochs'])
 
+            self._dialog = BusyDialog(
+                self, "Training",
+                f"Training on {len(train_ds)} windows from "
+                f"{len(train_sets)} session(s)",
+                cancel_text="Stop")
+            self._dialog.set_cancel_callback(self._stop_training)
+            self._dialog.show()
+
             self._worker = TrainWorker(model, train_loader, config, device)
             self._worker.epoch_done.connect(self._on_epoch)
             self._worker.finished.connect(self._on_training_done)
@@ -372,6 +383,7 @@ class TrainingPanel(QWidget):
             self._worker.start()
 
         except Exception as e:
+            self._close_dialog()
             self.log.append(f"ERROR: {e}")
             QMessageBox.critical(self, "Error", str(e))
 
@@ -384,6 +396,11 @@ class TrainingPanel(QWidget):
         self.progress_bar.setValue(epoch)
         self.progress_label.setText(f"Epoch {epoch}/{total} — Loss: {loss:.4f}")
 
+        if self._dialog is not None:
+            self._dialog.set_detail(
+                f"Epoch {epoch} of {total}   ·   loss {loss:.4f}")
+            self._dialog.set_progress(epoch, total)
+
         # Update loss curve
         self.ax.clear()
         self.ax.plot(range(1, len(self._losses) + 1), self._losses, 'b-', linewidth=1.5)
@@ -394,10 +411,24 @@ class TrainingPanel(QWidget):
         self.fig.tight_layout()
         self.canvas.draw()
 
+    def _close_dialog(self):
+        dialog = getattr(self, '_dialog', None)
+        if dialog is not None:
+            dialog.finish()
+            self._dialog = None
+
     def _on_training_done(self, model, losses):
         self.train_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.progress_bar.setVisible(False)
+
+        # Evaluation runs on the main thread and can take a moment on a large
+        # test set, so keep the window up rather than appearing to freeze.
+        if self._dialog is not None:
+            self._dialog.set_message("Evaluating on the test sessions")
+            self._dialog.set_detail("Running the model over held-out data…")
+            self._dialog.set_progress(0, 0)
+            self._dialog.cancel_btn.setEnabled(False)
 
         self.state['model'] = model
         self.state['train_losses'] = self._losses
@@ -408,6 +439,7 @@ class TrainingPanel(QWidget):
         else:
             self.log.append("Training complete. No test subjects for evaluation.")
             self.progress_label.setText("Training complete. No test data.")
+        self._close_dialog()
 
     def _run_evaluation(self, model):
         """Evaluate each test subject separately, then pool for global metrics."""
@@ -472,6 +504,7 @@ class TrainingPanel(QWidget):
             self.log.append(f"Evaluation error: {e}")
 
     def _on_training_error(self, msg):
+        self._close_dialog()
         self.train_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.progress_bar.setVisible(False)
