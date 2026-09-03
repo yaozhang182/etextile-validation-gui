@@ -74,26 +74,52 @@ def cache_description(video_path):
         return "A cache file exists but could not be read; it will be re-extracted."
 
 
+class _Cancelled(Exception):
+    """Raised out of the progress callback to abort an extraction."""
+
+
 class SkeletonWorker(QThread):
-    """Background thread for skeleton extraction of a single subject."""
+    """
+    Background thread for skeleton extraction of a single subject.
+
+    Extraction runs for minutes, so it has to be interruptible — otherwise Reset
+    (and closing the window) would have to wait for it. There is no cancel hook
+    in the extraction function itself, but it calls back once per frame, so
+    raising from that callback unwinds the loop cleanly and lands in run()'s
+    except clause.
+    """
     progress = pyqtSignal(int, int)  # frame_idx, total
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
+    cancelled = pyqtSignal()
 
     def __init__(self, video_path):
         super().__init__()
         self.video_path = video_path
+        self._stop = False
+
+    def stop(self):
+        """Ask the extraction to abort at the next frame."""
+        self._stop = True
+
+    def _tick(self, frame_idx, total):
+        if self._stop:
+            raise _Cancelled()
+        self.progress.emit(frame_idx, total)
 
     def run(self):
         try:
             from core.smpl_extraction import extract_skeleton_from_video
             result = extract_skeleton_from_video(
-                self.video_path,
-                progress_callback=lambda f, t: self.progress.emit(f, t),
+                self.video_path, progress_callback=self._tick,
             )
-            self.finished.emit(result)
+        except _Cancelled:
+            self.cancelled.emit()
+            return
         except Exception as e:
             self.error.emit(str(e))
+            return
+        self.finished.emit(result)
 
 
 class AddSubjectDialog(QDialog):
@@ -483,6 +509,7 @@ class DataImportPanel(QWidget):
         worker.progress.connect(lambda f, t, s=split, sub=subject: self._on_progress(f, t, s, sub))
         worker.finished.connect(lambda r, s=split, sub=subject: self._on_extraction_done(r, s, sub))
         worker.error.connect(lambda m, s=split, sub=subject: self._on_extraction_error(m, s, sub))
+        worker.cancelled.connect(lambda s=split, sub=subject: self._on_cancelled(s, sub))
         self._workers.append(worker)
         worker.start()
 
@@ -566,6 +593,38 @@ class DataImportPanel(QWidget):
         self.preview.append(f"[{split}/{subject['id']}] ERROR: {msg}")
         QMessageBox.critical(self, "Extraction Error", f"[{subject['id']}] {msg}")
         self._run_next_extraction()
+
+    def _on_cancelled(self, split, subject):
+        """Extraction was aborted; leave the subject queued rather than broken."""
+        if subject.get('status') == 'extracting':
+            subject['status'] = 'pending'
+        self._refresh_table(split)
+
+    def is_busy(self):
+        """True while any extraction thread is still running."""
+        return any(w.isRunning() for w in self._workers)
+
+    def cancel_all(self):
+        """Ask every running extraction to stop, and drop the queue."""
+        self._pending_extractions = []
+        for worker in self._workers:
+            if worker.isRunning():
+                worker.stop()
+        for worker in self._workers:
+            if worker.isRunning():
+                worker.wait(5000)
+        self._workers = []
+        self.extract_btn.setEnabled(True)
+        self.progress_bar.setVisible(False)
+        self.progress_label.setText("")
+
+    def reset(self):
+        """Clear every subject and return the tab to its opening state."""
+        self.cancel_all()
+        for split in ('train', 'test'):
+            get_subjects(self.state, split).clear()
+            self._refresh_table(split)
+        self.preview.clear()
 
     def refresh(self):
         for split in ('train', 'test'):

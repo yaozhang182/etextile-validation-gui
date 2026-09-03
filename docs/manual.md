@@ -190,6 +190,21 @@ participant, 10 channels):
 
 A tick appears on each tab in the bar as you complete that step.
 
+### Starting over
+
+**Reset**, at the right-hand end of the tab bar, is available from every tab. It
+asks for confirmation, then clears everything — subjects, the selected joint
+angles and sensor channels, the trained model and all results — and returns you
+to Tab 1.
+
+Use it between experiments rather than removing subjects one at a time: leaving
+an old model or an old selection behind is how results get attributed to the
+wrong data.
+
+If an extraction or a training run is still going, Reset offers to stop it. The
+joint angles already computed stay cached, so re-adding those recordings does not
+re-extract them.
+
 ---
 
 ## Tab 1 — Data Import
@@ -207,6 +222,7 @@ meaningful — a model scored on data it trained on always looks better than it 
 | **Remove Selected** | drops the highlighted row | wrong file picked, or excluding a bad recording |
 | **Extract Skeleton & Compute Angles** | runs pose tracking on every session that has not been processed | once after adding sessions |
 | Log pane (bottom) | per-session summary: frames, channels, usable overlap, tracking quality | to confirm each session looks as expected |
+| **Reset** (tab bar, far right) | clears everything and returns to this tab | between experiments; available from any tab |
 
 The **Status** column shows `pending` → `extracting` → `ready`. Only `ready`
 sessions are used later.

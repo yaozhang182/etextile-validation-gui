@@ -179,6 +179,37 @@ class TrainingPanel(QWidget):
                 "No angles/sensors selected. Go to Tab 3 to select channels."
             )
 
+    def is_busy(self):
+        """True while a training run is still going."""
+        return self._worker is not None and self._worker.isRunning()
+
+    def cancel(self):
+        """Stop training and wait for the thread to unwind."""
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.stop()
+            self._worker.wait(10000)
+        self._worker = None
+        self.train_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        self.progress_bar.setVisible(False)
+        self.progress_label.setText("")
+
+    def reset(self):
+        """Back to defaults: no model, no curve, no log."""
+        self.cancel()
+        self._test_parts = []
+        self._losses = []
+        self.log.clear()
+        self.ax.clear()
+        self.canvas.draw()
+        self.epochs_spin.setValue(50)
+        self.lr_spin.setValue(0.001)
+        self.seq_spin.setValue(40)
+        self.batch_spin.setValue(32)
+        self.model_combo.setCurrentIndex(0)
+        self.align_combo.setCurrentIndex(0)
+        self.refresh()
+
     def _build_config(self):
         model_map = {"HybridCNNLSTM": "hybrid_cnn_lstm", "SimpleCNN1D": "simple_cnn"}
         return {

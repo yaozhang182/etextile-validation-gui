@@ -414,6 +414,109 @@ def test_dashboard_refresh_does_not_accumulate_colorbars():
     assert counts[0] == 2, counts
 
 
+def _loaded_window():
+    """A window carrying a full pipeline's worth of state."""
+    w = MainWindow()
+    w.state['train_subjects'].append(fake_subject('S1', 200, 600, 1e9))
+    w.state['test_subjects'].append(fake_subject('T1', 150, 450, 2e9))
+    w.state['selected_angles'] = ['a1']
+    w.state['selected_sensors'] = ['S1', 'S2']
+    w.state['model'] = object()
+    w.state['metrics'] = {
+        'Global_MPJAE': 3.0, 'Global_AMPE': 5.0, 'Global_RMSE': 4.0,
+        'Global_PCC': 0.9,
+        'MPJAE_per_joint': {'A': 3.0}, 'AMPE_per_joint': {'A': 5.0},
+        'RMSE_per_joint': {'A': 4.0}, 'PCC_per_joint': {'A': 0.9},
+    }
+    w.state['metrics_per_subject'] = {'T1': w.state['metrics']}
+    w.state['predictions'] = np.random.rand(40, 1)
+    w.state['ground_truth'] = np.random.rand(40, 1)
+    for i in range(5):
+        w.tabs.setCurrentIndex(i)
+        _app.processEvents()
+    return w
+
+
+def test_reset_clears_shared_state_and_returns_to_tab_1():
+    w = _loaded_window()
+    assert w.tabs.currentIndex() == 4
+
+    w.reset_all()
+    _app.processEvents()
+
+    assert w.tabs.currentIndex() == 0, "must land back on Data Import"
+    assert w.state['train_subjects'] == [] and w.state['test_subjects'] == []
+    assert w.state['selected_angles'] == [] and w.state['selected_sensors'] == []
+    for key in ('model', 'metrics', 'metrics_per_subject', 'predictions',
+                'ground_truth', 'scaler', 'config'):
+        assert w.state[key] is None, key
+    assert w.state['alignment_method'] == 'upsample_sensor'
+
+
+def test_reset_clears_the_panels_not_only_the_state():
+    """Stale widgets are as misleading as stale state."""
+    w = _loaded_window()
+    w.reset_all()
+    _app.processEvents()
+
+    assert w.tab_import.tables['train'].rowCount() == 0
+    assert w.tab_import.tables['test'].rowCount() == 0
+    assert not any(cb.isChecked()
+                   for cb in w.tab_comparison.angle_checkboxes.values())
+    assert w.tab_results.metrics_table.rowCount() == 0
+    assert w.tab_results.subject_table.rowCount() == 0
+    assert w.tab_skeleton._cap is None, "the video decoder must be released"
+    assert w.tab_training.log.toPlainText() == ''
+    # hyperparameters back to their defaults
+    assert w.tab_training.seq_spin.value() == 40
+    assert w.tab_training.epochs_spin.value() == 50
+
+
+def test_pipeline_still_works_after_a_reset():
+    """A reset that leaves the app unusable would be worse than no reset."""
+    w = _loaded_window()
+    w.reset_all()
+    _app.processEvents()
+
+    w.state['train_subjects'].append(fake_subject('S1', 200, 600, 3e9))
+    w.state['selected_angles'] = ['a1', 'a2']
+    w.state['selected_sensors'] = ['S1', 'S2', 'S3', 'S4']
+    parts = w.tab_training._align_split(
+        'train', w.state['selected_angles'], w.state['selected_sensors'],
+        'upsample_sensor')
+    assert parts and len(parts[0][1]) > 100, parts
+
+
+def test_reset_needs_no_confirmation_path_to_be_destructive():
+    """confirm_reset() must not clear anything on its own; reset_all() does."""
+    import inspect
+    src = inspect.getsource(MainWindow.confirm_reset)
+    assert 'exec()' in src and 'reset_all' in src
+    # and the destructive call is guarded by the dialog's result
+    assert 'StandardButton.Yes' in src
+
+
+def test_extraction_worker_is_cancellable():
+    """
+    Extraction runs for minutes. Without a cancel hook, Reset and closing the
+    window would both have to wait for it.
+    """
+    from gui.panels.data_import import SkeletonWorker, _Cancelled
+
+    worker = SkeletonWorker('/tmp/nonexistent.mp4')
+    assert hasattr(worker, 'stop')
+    worker.stop()
+    raised = False
+    try:
+        worker._tick(1, 100)
+    except _Cancelled:
+        raised = True
+    assert raised, "a stopped worker must abort from its progress callback"
+
+    fresh = SkeletonWorker('/tmp/nonexistent.mp4')
+    fresh._tick(1, 100)          # not stopped: must not raise
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith('test_')]
     failed = 0

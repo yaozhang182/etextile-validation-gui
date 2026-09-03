@@ -160,6 +160,25 @@ class SkeletonViewerPanel(QWidget):
                 f"No {self._split} subjects. Add one in Tab 1 first."
             )
 
+    def reset(self):
+        """Stop playback, drop the decoder and the cached confidence, clear the view."""
+        if self._playing:
+            self._toggle_play()
+        self._timer.stop()
+        if self._cap is not None:
+            self._cap.release()          # an open video file would otherwise leak
+        self._cap = None
+        self._cap_path = None
+        self._conf_key = None
+        self._conf_cache = None
+        self.frame_slider.setValue(0)
+        self.frame_slider.setMaximum(0)
+        self.ax_video.clear()
+        self.ax_skeleton.clear()
+        style_3d_axes(self.ax_skeleton)
+        self.canvas.draw()
+        self.refresh()
+
     def _show_quality(self):
         """Plain-language summary of how far the pose tracking can be trusted."""
         from core.confidence import tracking_report, LOW_CONFIDENCE, is_synthesised

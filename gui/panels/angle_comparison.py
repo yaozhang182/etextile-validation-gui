@@ -197,6 +197,16 @@ class AngleComparisonPanel(QWidget):
         self._annotate_angle_confidence()
         self._update_plot()
 
+    def reset(self):
+        """Clear the selections that define the learning problem."""
+        for cb in self.angle_checkboxes.values():
+            cb.blockSignals(True)
+            cb.setChecked(False)
+            cb.blockSignals(False)
+        self.state['selected_angles'] = []
+        self.state['selected_sensors'] = []
+        self.refresh()
+
     def _annotate_angle_confidence(self):
         """
         Label each angle checkbox with its tracking confidence.

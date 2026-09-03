@@ -3,7 +3,8 @@ Main application window with 5-tab navigation.
 """
 
 from PyQt6.QtWidgets import (
-    QMainWindow, QTabWidget, QStatusBar, QMenuBar, QMessageBox, QPushButton
+    QMainWindow, QTabWidget, QStatusBar, QMenuBar, QMessageBox, QPushButton,
+    QWidget, QHBoxLayout,
 )
 from PyQt6.QtCore import Qt, QUrl, QTimer
 from PyQt6.QtGui import QAction, QDesktopServices
@@ -14,6 +15,7 @@ from gui.panels.angle_comparison import AngleComparisonPanel
 from gui.panels.training import TrainingPanel
 from gui.panels.results_dashboard import ResultsDashboardPanel
 from gui.state import ready_subjects
+from gui import design, icons
 
 #: Where the manual lives. Each tab deep-links to its own section, so help is
 #: contextual rather than dumping the reader at the top of a long page.
@@ -85,6 +87,24 @@ class MainWindow(QMainWindow):
         ):
             self.tabs.addTab(panel, title)
 
+        # The tab bar's corner is the one place visible from every tab, so both
+        # the always-available actions live there.
+        corner = QWidget()
+        corner_row = QHBoxLayout(corner)
+        corner_row.setContentsMargins(0, 0, 6, 0)
+        corner_row.setSpacing(4)
+
+        self.reset_btn = QPushButton("Reset")
+        self.reset_btn.setProperty("subtle", True)
+        self.reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.reset_btn.setToolTip(
+            "Clear everything and start again from Tab 1 — subjects, selected "
+            "channels, the trained model and all results."
+        )
+        icons.decorate(self.reset_btn, 'rotate-ccw', design.TEXT_MUTED)
+        self.reset_btn.clicked.connect(self.confirm_reset)
+        corner_row.addWidget(self.reset_btn)
+
         self.help_btn = QPushButton("?")
         self.help_btn.setProperty("subtle", True)
         self.help_btn.setFixedSize(26, 24)
@@ -92,7 +112,9 @@ class MainWindow(QMainWindow):
         self.help_btn.clicked.connect(
             lambda: open_manual(TABS[self.tabs.currentIndex()][1])
         )
-        self.tabs.setCornerWidget(self.help_btn, Qt.Corner.TopRightCorner)
+        corner_row.addWidget(self.help_btn)
+
+        self.tabs.setCornerWidget(corner, Qt.Corner.TopRightCorner)
 
         # Connect signals: when tab changes, refresh the new tab
         self.tabs.currentChanged.connect(self._on_tab_changed)
@@ -159,6 +181,84 @@ class MainWindow(QMainWindow):
             "recording and a sensor CSV — no motion capture, no code.</p>"
             f'<p><a href="{manual_url()}">User manual</a></p>'
         )
+
+    # ------------------------------------------------------------------
+    # Reset
+    # ------------------------------------------------------------------
+
+    def _busy_panels(self):
+        """Panels with a thread still running."""
+        return [p for p in (self.tab_import, self.tab_training)
+                if hasattr(p, 'is_busy') and p.is_busy()]
+
+    def confirm_reset(self):
+        """Ask, then clear everything and go back to the first tab."""
+        busy = self._busy_panels()
+
+        question = ("Reset and start again from Tab 1?\n\n"
+                    "This clears all subjects, the selected joint angles and "
+                    "sensor channels, the trained model and all results.")
+        if busy:
+            question += ("\n\nWork is still running and will be stopped. Joint "
+                         "angles already computed stay cached, so re-adding "
+                         "those recordings will not re-extract them.")
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning if busy else QMessageBox.Icon.Question)
+        box.setWindowTitle("Reset")
+        box.setText(question)
+        box.setStandardButtons(QMessageBox.StandardButton.Yes
+                               | QMessageBox.StandardButton.No)
+        box.setDefaultButton(QMessageBox.StandardButton.No)
+        box.button(QMessageBox.StandardButton.Yes).setText(
+            "Stop and reset" if busy else "Reset")
+        box.button(QMessageBox.StandardButton.No).setText("Cancel")
+
+        if box.exec() != QMessageBox.StandardButton.Yes:
+            return False
+        self.reset_all()
+        return True
+
+    def reset_all(self):
+        """
+        Return to the state a fresh launch would be in.
+
+        Panels are reset before the shared state is cleared: a panel may still
+        hold a running thread or an open video file, and those must be released
+        while the data they refer to is still intact.
+        """
+        self.reset_btn.setEnabled(False)
+        try:
+            for panel in (self.tab_import, self.tab_training, self.tab_skeleton,
+                          self.tab_comparison, self.tab_results):
+                if hasattr(panel, 'reset'):
+                    panel.reset()
+
+            self.state['train_subjects'] = []
+            self.state['test_subjects'] = []
+            self.state['selected_angles'] = []
+            self.state['selected_sensors'] = []
+            self.state['alignment_method'] = 'upsample_sensor'
+            for key in ('model', 'train_losses', 'predictions', 'ground_truth',
+                        'metrics', 'metrics_per_subject', 'scaler', 'config'):
+                self.state[key] = None
+
+            self.tabs.setCurrentIndex(0)
+            self._update_tab_states()
+            self.tab_import.refresh()
+            self.statusBar().showMessage(
+                "Reset. Start by importing data in Tab 1.")
+        finally:
+            self.reset_btn.setEnabled(True)
+
+    def closeEvent(self, event):
+        """Do not leave extraction or training threads running behind the window."""
+        for panel in (self.tab_import, self.tab_training):
+            if hasattr(panel, 'cancel_all'):
+                panel.cancel_all()
+            elif hasattr(panel, 'cancel'):
+                panel.cancel()
+        super().closeEvent(event)
 
     # ------------------------------------------------------------------
     # Workflow state

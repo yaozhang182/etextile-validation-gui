@@ -143,6 +143,22 @@ class ResultsDashboardPanel(QWidget):
         self._plot_sensor_importance()
         self._plot_predictions(metrics)
 
+    def reset(self):
+        """Empty every table and figure so no stale result is left on screen."""
+        self.info_label.setText("Train a model in Tab 4 first.")
+        for table in (self.subject_table, self.metrics_table):
+            table.clearContents()
+            table.setRowCount(0)
+        self.subject_group.setVisible(False)
+        for figure, canvas in ((self.fig_heatmap, self.canvas_heatmap),
+                               (self.fig_importance, self.canvas_importance),
+                               (self.fig_pred, self.canvas_pred)):
+            figure.clf()
+            canvas.draw()
+        # clf() dropped the axes these attributes referred to
+        self.ax_heatmap = self.fig_heatmap.add_subplot(111)
+        self.ax_importance = self.fig_importance.add_subplot(111)
+
     def _fill_subject_table(self):
         """Show how the model does on each test subject individually."""
         per_subject = self.state.get('metrics_per_subject') or {}
