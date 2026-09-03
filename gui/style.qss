@@ -1,0 +1,316 @@
+/*
+ * Application stylesheet.
+ *
+ * Double-brace placeholders are substituted from gui/design.py by gui.theme, so
+ * every colour and metric has exactly one definition. Do not write literal
+ * colours here.
+ *
+ * Scope note: container chrome (tabs, group boxes, headers, buttons) is styled
+ * freely. Interiors of data widgets — table cells, combo popups — are touched
+ * only lightly, because heavy QSS there overrides native selection and metrics
+ * behaviour that users rely on.
+ */
+
+QWidget {
+    background: {{BG}};
+    color: {{TEXT}};
+    font-family: {{FONT_UI}};
+    font-size: {{SIZE_BASE}}px;
+}
+
+QToolTip {
+    background: {{TEXT}};
+    color: {{SURFACE}};
+    border: none;
+    border-radius: {{RADIUS_SM}}px;
+    padding: 6px 8px;
+    font-size: {{SIZE_SMALL}}px;
+}
+
+/* ---------------------------------------------------------------- tabs ---
+ * The five tabs are a strictly sequential workflow, so they are styled as
+ * numbered steps: a quiet rail with the current step lifted onto the surface
+ * colour and underlined in the accent.
+ */
+QTabWidget::pane {
+    background: {{BG}};
+    border: none;
+    border-top: 1px solid {{BORDER}};
+    top: -1px;
+}
+QTabBar {
+    background: transparent;
+    qproperty-drawBase: 0;
+}
+QTabBar::tab {
+    background: transparent;
+    color: {{TEXT_MUTED}};
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 9px 18px;
+    margin-right: 2px;
+    font-size: {{SIZE_BASE}}px;
+}
+QTabBar::tab:hover:!selected {
+    color: {{TEXT}};
+    background: {{SURFACE_ALT}};
+}
+QTabBar::tab:selected {
+    background: {{SURFACE}};
+    color: {{ACCENT}};
+    border-bottom: 2px solid {{ACCENT}};
+    font-weight: 600;
+}
+QTabBar::tab:disabled {
+    color: {{TEXT_FAINT}};
+}
+
+/* --------------------------------------------------------- group boxes ---
+ * Cards. The title sits on the border, which gives each panel section a clear
+ * boundary without drawing a heavy frame.
+ */
+QGroupBox {
+    background: {{SURFACE}};
+    border: 1px solid {{BORDER}};
+    border-radius: {{RADIUS}}px;
+    margin-top: 10px;
+    padding: {{SPACE_3}}px {{SPACE_2}}px {{SPACE_2}}px {{SPACE_2}}px;
+    font-size: {{SIZE_SMALL}}px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: {{SPACE_2}}px;
+    padding: 0 6px;
+    background: {{SURFACE}};
+    color: {{TEXT_MUTED}};
+    font-weight: 600;
+}
+
+/* ------------------------------------------------------------- buttons --- */
+QPushButton {
+    background: {{SURFACE}};
+    color: {{TEXT}};
+    border: 1px solid {{BORDER}};
+    border-radius: {{RADIUS_SM}}px;
+    padding: 0 14px;
+    min-height: {{CONTROL_H}}px;
+    font-size: {{SIZE_BASE}}px;
+}
+QPushButton:hover  { border-color: {{BORDER_HOVER}}; background: {{SURFACE_ALT}}; }
+QPushButton:pressed { background: {{BG}}; }
+QPushButton:disabled {
+    color: {{TEXT_FAINT}};
+    background: {{SURFACE_ALT}};
+    border-color: {{BORDER}};
+}
+
+/* The one action that moves the workflow forward, per tab. */
+QPushButton[accent="true"] {
+    background: {{ACCENT}};
+    color: {{TEXT_ON_ACCENT}};
+    border: 1px solid {{ACCENT}};
+    font-weight: 600;
+    padding: 0 20px;
+    min-height: 34px;
+}
+QPushButton[accent="true"]:hover   { background: {{ACCENT_HOVER}}; border-color: {{ACCENT_HOVER}}; }
+QPushButton[accent="true"]:pressed { background: {{ACCENT_PRESS}}; border-color: {{ACCENT_PRESS}}; }
+QPushButton[accent="true"]:disabled {
+    background: {{BORDER}};
+    border-color: {{BORDER}};
+    color: {{SURFACE}};
+}
+
+/* Compact icon-ish buttons: the per-tab help affordance. */
+QPushButton[subtle="true"] {
+    background: transparent;
+    border: 1px solid transparent;
+    color: {{TEXT_MUTED}};
+    min-height: 24px;
+    padding: 0 8px;
+}
+QPushButton[subtle="true"]:hover {
+    background: {{SURFACE_ALT}};
+    border-color: {{BORDER}};
+    color: {{ACCENT}};
+}
+
+/* -------------------------------------------------------------- inputs --- */
+QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+    background: {{SURFACE}};
+    border: 1px solid {{BORDER}};
+    border-radius: {{RADIUS_SM}}px;
+    padding: 0 8px;
+    min-height: {{CONTROL_H}}px;
+    selection-background-color: {{ACCENT}};
+    selection-color: {{TEXT_ON_ACCENT}};
+}
+QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
+    border-color: {{ACCENT}};
+}
+/* Chosen file paths are read-only fields; make them read as data, not inputs. */
+QLineEdit:read-only {
+    background: {{SURFACE_ALT}};
+    color: {{TEXT_MUTED}};
+    font-family: {{FONT_MONO}};
+    font-size: {{SIZE_SMALL}}px;
+}
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+QComboBox QAbstractItemView {
+    background: {{SURFACE}};
+    border: 1px solid {{BORDER}};
+    selection-background-color: {{ACCENT_SOFT}};
+    selection-color: {{TEXT}};
+    outline: none;
+}
+
+/* ------------------------------------------------------------ checkbox --- */
+QCheckBox {
+    spacing: 7px;
+    background: transparent;
+    font-size: {{SIZE_SMALL}}px;
+    padding: 2px 0;
+}
+QCheckBox::indicator {
+    width: 15px; height: 15px;
+    border: 1px solid {{BORDER_HOVER}};
+    border-radius: 3px;
+    background: {{SURFACE}};
+}
+QCheckBox::indicator:hover   { border-color: {{ACCENT}}; }
+QCheckBox::indicator:checked {
+    background: {{ACCENT}};
+    border-color: {{ACCENT}};
+}
+/* A channel whose ground truth is poorly tracked. */
+QCheckBox[lowConfidence="true"] { color: {{DANGER}}; }
+
+/* -------------------------------------------------------------- tables ---
+ * Header and grid only; cell rendering is left to Qt.
+ */
+QTableWidget {
+    background: {{SURFACE}};
+    alternate-background-color: {{SURFACE_ALT}};
+    border: 1px solid {{BORDER}};
+    border-radius: {{RADIUS_SM}}px;
+    gridline-color: {{BORDER}};
+    selection-background-color: {{ACCENT_SOFT}};
+    selection-color: {{TEXT}};
+}
+QHeaderView::section {
+    background: {{SURFACE_ALT}};
+    color: {{TEXT_MUTED}};
+    border: none;
+    border-bottom: 1px solid {{BORDER}};
+    border-right: 1px solid {{BORDER}};
+    padding: 7px 8px;
+    font-size: {{SIZE_TINY}}px;
+    font-weight: 600;
+}
+QTableCornerButton::section {
+    background: {{SURFACE_ALT}};
+    border: none;
+    border-bottom: 1px solid {{BORDER}};
+}
+
+/* ---------------------------------------------------- text / log panes --- */
+QTextEdit {
+    background: {{SURFACE}};
+    border: 1px solid {{BORDER}};
+    border-radius: {{RADIUS_SM}}px;
+    padding: {{SPACE_2}}px;
+    selection-background-color: {{ACCENT}};
+    selection-color: {{TEXT_ON_ACCENT}};
+}
+/* Progress/diagnostic logs read better monospaced. */
+QTextEdit[log="true"] {
+    font-family: {{FONT_MONO}};
+    font-size: {{SIZE_SMALL}}px;
+    color: {{TEXT_MUTED}};
+}
+
+/* ------------------------------------------------------------ progress --- */
+QProgressBar {
+    background: {{BORDER}};
+    border: none;
+    border-radius: 3px;
+    height: 6px;
+    text-align: center;
+    color: transparent;      /* the label beneath carries the text */
+}
+QProgressBar::chunk {
+    background: {{ACCENT}};
+    border-radius: 3px;
+}
+
+/* -------------------------------------------------------------- slider --- */
+QSlider::groove:horizontal {
+    height: 4px;
+    background: {{BORDER}};
+    border-radius: 2px;
+}
+QSlider::sub-page:horizontal {
+    background: {{ACCENT}};
+    border-radius: 2px;
+}
+QSlider::handle:horizontal {
+    background: {{SURFACE}};
+    border: 2px solid {{ACCENT}};
+    width: 13px; height: 13px;
+    margin: -6px 0;
+    border-radius: 8px;
+}
+QSlider::handle:horizontal:hover { border-color: {{ACCENT_HOVER}}; }
+
+/* ------------------------------------------------------------ scrolling --- */
+QScrollArea { background: transparent; border: none; }
+QScrollBar:vertical, QScrollBar:horizontal {
+    background: transparent;
+    width: 11px; height: 11px;
+    margin: 0;
+}
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+    background: {{BORDER_HOVER}};
+    border-radius: 5px;
+    min-height: 28px; min-width: 28px;
+}
+QScrollBar::handle:hover { background: {{TEXT_FAINT}}; }
+QScrollBar::add-line, QScrollBar::sub-line { height: 0; width: 0; }
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+
+/* --------------------------------------------------------------- misc ---- */
+QLabel { background: transparent; }
+QLabel[hint="true"]    { color: {{TEXT_MUTED}}; font-size: {{SIZE_SMALL}}px; }
+QLabel[headline="true"] { font-size: {{SIZE_TITLE}}px; font-weight: 600; }
+QLabel[metric="true"]  {
+    font-family: {{FONT_MONO}};
+    font-size: {{SIZE_TITLE}}px;
+    color: {{TEXT}};
+}
+
+QStatusBar {
+    background: {{SURFACE}};
+    border-top: 1px solid {{BORDER}};
+    color: {{TEXT_MUTED}};
+    font-size: {{SIZE_SMALL}}px;
+}
+QStatusBar::item { border: none; }
+
+QMenuBar { background: {{SURFACE}}; border-bottom: 1px solid {{BORDER}}; }
+QMenuBar::item { padding: 6px 11px; background: transparent; }
+QMenuBar::item:selected { background: {{ACCENT_SOFT}}; color: {{ACCENT}}; }
+QMenu {
+    background: {{SURFACE}};
+    border: 1px solid {{BORDER}};
+    border-radius: {{RADIUS_SM}}px;
+    padding: 4px;
+}
+QMenu::item { padding: 6px 22px 6px 14px; border-radius: 3px; }
+QMenu::item:selected { background: {{ACCENT_SOFT}}; color: {{ACCENT}}; }
+QMenu::separator { height: 1px; background: {{BORDER}}; margin: 4px 6px; }
+
+QDialog { background: {{BG}}; }

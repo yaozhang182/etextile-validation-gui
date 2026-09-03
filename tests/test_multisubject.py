@@ -169,19 +169,40 @@ def test_every_tab_refreshes_with_no_data():
 
 
 def test_add_subject_dialog_requires_all_three_files():
+    """OK needs an ID, all three files, and no blocking validation problem."""
+    examples = (os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                + '/input_data/examples_data/session_1')
     parent = MainWindow()   # must outlive the dialog, or Qt deletes its children
     dlg = AddSubjectDialog(parent, 'train', 'S1')
     ok = dlg.buttons.button(QDialogButtonBox.StandardButton.Ok)
-    assert not ok.isEnabled()
-    for edit in (dlg.video_edit, dlg.sensor_edit):
-        edit.setText('/tmp/x')
-        dlg._validate()
-        assert not ok.isEnabled()
-    dlg.times_edit.setText('/tmp/x')
-    dlg._validate()
-    assert ok.isEnabled()
+
+    assert not ok.isEnabled(), "nothing selected"
+    dlg.video_edit.setText(f'{examples}/video.mp4');  dlg._validate()
+    assert not ok.isEnabled(), "one file is not enough"
+    dlg.sensor_edit.setText(f'{examples}/sensor.csv'); dlg._validate()
+    assert not ok.isEnabled(), "two files are not enough"
+
+    dlg.times_edit.setText(f'{examples}/frames.csv'); dlg._validate()
+    assert ok.isEnabled(), "a complete, valid session should be accepted"
+
     dlg.id_edit.setText('')
+    assert not ok.isEnabled(), "an ID is required"
+
+
+def test_add_subject_dialog_blocks_invalid_files():
+    """
+    Validation gates the dialog, so a bad selection cannot become a subject.
+    Previously three unreadable paths were accepted and failed much later.
+    """
+    parent = MainWindow()
+    dlg = AddSubjectDialog(parent, 'train', 'S1')
+    ok = dlg.buttons.button(QDialogButtonBox.StandardButton.Ok)
+    for edit in (dlg.video_edit, dlg.sensor_edit, dlg.times_edit):
+        edit.setText('/tmp/definitely-not-a-real-file')
+    dlg._validate()
     assert not ok.isEnabled()
+    assert any(f.blocking for f in dlg.findings)
+    assert dlg.report.isVisible() or not dlg.report.isHidden()
 
 
 def test_angle_cache_roundtrip_and_corruption():
@@ -322,6 +343,75 @@ def test_extraction_result_supplies_everything_the_cache_needs():
     src = inspect.getsource(smpl_extraction.extract_skeleton_from_video)
     for key in ("'smplh_joints'", "'visibility'", "'fps'"):
         assert key in src, f"extraction no longer produces {key}"
+
+
+def test_rebuilding_the_sensor_list_leaves_no_ghost_widgets():
+    """
+    A widget taken out of a layout keeps its parent and geometry until
+    deleteLater() runs, so it goes on painting. That put two labels on top of
+    each other in the sensor panel. Rebuilding must fully detach the old ones.
+    """
+    from PyQt6.QtWidgets import QLabel
+
+    def label_count(panel):
+        # Count only the rebuilt region. The group box also holds permanent
+        # chrome (the help badge's label), which is not what this guards.
+        layout = panel.sensor_layout
+        return sum(1 for i in range(layout.count())
+                   if isinstance(layout.itemAt(i).widget(), QLabel))
+
+    w = MainWindow()
+    w.state['train_subjects'].append(fake_subject('S1', 100, 300, 1e9))
+
+    counts = []
+    for _ in range(5):
+        w.tab_comparison.refresh()
+        _app.processEvents()
+        counts.append(label_count(w.tab_comparison))
+
+    assert len(set(counts)) == 1, f"labels accumulated across rebuilds: {counts}"
+    assert list(w.tab_comparison.sensor_checkboxes) == ['S1', 'S2', 'S3', 'S4']
+
+    # With no data at all: exactly one explanatory label, and still stable.
+    w2 = MainWindow()
+    empties = []
+    for _ in range(3):
+        w2.tab_comparison.refresh()
+        _app.processEvents()
+        empties.append(label_count(w2.tab_comparison))
+    assert empties == [1, 1, 1], empties
+
+
+def test_dashboard_refresh_does_not_accumulate_colorbars():
+    """
+    seaborn adds its colourbar as a new axes and ax.clear() does not remove it,
+    so every visit to the Results tab used to add another colourbar.
+    """
+    def metrics(n):
+        joints = [f'J{i}' for i in range(n)]
+        return {
+            'Global_MPJAE': 3.0, 'Global_AMPE': 5.0,
+            'Global_RMSE': 4.0, 'Global_PCC': 0.9,
+            'MPJAE_per_joint': {j: 3.0 for j in joints},
+            'AMPE_per_joint': {j: 5.0 for j in joints},
+            'RMSE_per_joint': {j: 4.0 for j in joints},
+            'PCC_per_joint': {j: 0.9 for j in joints},
+        }
+
+    w = MainWindow()
+    w.state['metrics'] = metrics(3)
+    w.state['predictions'] = np.random.rand(50, 3)
+    w.state['ground_truth'] = np.random.rand(50, 3)
+
+    counts = []
+    for _ in range(4):
+        w.tab_results.refresh()
+        _app.processEvents()
+        counts.append(len(w.tab_results.fig_heatmap.axes))
+
+    assert len(set(counts)) == 1, f"axes count grew across refreshes: {counts}"
+    # one for the heatmap, one for its colourbar
+    assert counts[0] == 2, counts
 
 
 def main():

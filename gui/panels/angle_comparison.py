@@ -17,6 +17,8 @@ from matplotlib.figure import Figure
 from gui.state import (
     get_subjects, common_sensor_columns, inconsistent_sensor_subjects,
 )
+from gui.theme import set_style_property
+from gui import help as help_ui
 
 # Angle grouping by body part
 ANGLE_GROUPS = {
@@ -31,6 +33,30 @@ ANGLE_GROUPS = {
     'Elbow': ['left_elbow_flexion', 'right_elbow_flexion'],
     'Neck': ['neck_flexion', 'neck_bending'],
 }
+
+
+def _clear_layout(layout):
+    """
+    Empty a layout, removing its widgets from the display immediately.
+
+    deleteLater() alone is not enough: it defers destruction to the event loop,
+    and a widget taken out of a layout keeps its parent and its last geometry, so
+    it goes on painting until then. The result is old and new labels drawn on top
+    of each other. setParent(None) detaches and hides it at once; deleteLater
+    then frees it. Nested layouts are handled too, or the buttons inside them
+    would be orphaned the same way.
+    """
+    while layout.count():
+        item = layout.takeAt(0)
+        widget = item.widget()
+        if widget is not None:
+            widget.setParent(None)
+            widget.deleteLater()
+        else:
+            child = item.layout()
+            if child is not None:
+                _clear_layout(child)
+                child.setParent(None)
 
 
 class AngleComparisonPanel(QWidget):
@@ -65,6 +91,11 @@ class AngleComparisonPanel(QWidget):
 
         # Joint angle checkboxes
         angle_group = QGroupBox("Joint Angles (targets)")
+        angle_header = QVBoxLayout()
+        angle_header.addWidget(help_ui.labelled(
+            "What the model will predict", 'angle_targets'))
+        angle_header.addWidget(help_ui.labelled(
+            "(0.00) = tracking confidence", 'angle_confidence'))
         angle_scroll = QScrollArea()
         angle_scroll.setWidgetResizable(True)
         angle_inner = QWidget()
@@ -82,6 +113,7 @@ class AngleComparisonPanel(QWidget):
         angle_layout.addStretch()
         angle_scroll.setWidget(angle_inner)
         ag = QVBoxLayout()
+        ag.addLayout(angle_header)
         ag.addWidget(angle_scroll)
 
         # Quick select buttons for angles
@@ -102,7 +134,11 @@ class AngleComparisonPanel(QWidget):
 
         # Sensor channel checkboxes
         self.sensor_group = QGroupBox("Sensor Channels (inputs)")
-        self.sensor_layout = QVBoxLayout(self.sensor_group)
+        sensor_outer = QVBoxLayout(self.sensor_group)
+        sensor_outer.addWidget(help_ui.labelled(
+            "What the model may use as input", 'sensor_inputs'))
+        self.sensor_layout = QVBoxLayout()
+        sensor_outer.addLayout(self.sensor_layout)
         self.sensor_layout.addWidget(QLabel("Load sensor data in Tab 1 first."))
         left_panel.addWidget(self.sensor_group)
 
@@ -184,7 +220,7 @@ class AngleComparisonPanel(QWidget):
 
             if summary is None:
                 cb.setText(name)
-                cb.setStyleSheet("")
+                set_style_property(cb, "lowConfidence", False)
                 cb.setToolTip(
                     "Extract a skeleton in Tab 1 to see tracking confidence."
                     + (f"\nNote: {notes[0]}." if notes else "")
@@ -193,7 +229,7 @@ class AngleComparisonPanel(QWidget):
 
             mean = summary['mean']
             cb.setText(f"{name}  ({mean:.2f})")
-            cb.setStyleSheet("color: #c62828;" if mean < LOW_CONFIDENCE else "")
+            set_style_property(cb, "lowConfidence", mean < LOW_CONFIDENCE)
             tip = [
                 f"Mean tracking confidence {mean:.2f}, worst frame {summary['min']:.2f}.",
                 f"{summary['frac_low'] * 100:.0f}% of frames below {LOW_CONFIDENCE:.1f}.",
@@ -208,16 +244,8 @@ class AngleComparisonPanel(QWidget):
         Offer only sensor channels present in EVERY ready subject, so a
         selection can never reference a channel some subject is missing.
         """
-        # Clear existing
-        for cb in self.sensor_checkboxes.values():
-            cb.deleteLater()
         self.sensor_checkboxes.clear()
-
-        # Remove old widgets
-        while self.sensor_layout.count() > 0:
-            item = self.sensor_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        _clear_layout(self.sensor_layout)
 
         sensor_cols = common_sensor_columns(self.state)
         if not sensor_cols:

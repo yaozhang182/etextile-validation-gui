@@ -17,6 +17,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from gui.state import ready_subjects
+from gui import help as help_ui, icons
 
 # Label -> value for the alignment dropdown. 'upsample_sensor' interpolates the
 # sensor stream onto the per-frame video timestamps, which is what the ground
@@ -77,9 +78,12 @@ class TrainingPanel(QWidget):
         layout = QVBoxLayout(self)
 
         # --- Selection summary ---
+        selection_row = QHBoxLayout()
         self.selection_label = QLabel("No angles/sensors selected. Go to Tab 3 first.")
         self.selection_label.setWordWrap(True)
-        layout.addWidget(self.selection_label)
+        selection_row.addWidget(self.selection_label, stretch=1)
+        help_ui.attach(selection_row, 'training_selection')
+        layout.addLayout(selection_row)
 
         # --- Hyperparameters ---
         hp_group = QGroupBox("Hyperparameters")
@@ -104,7 +108,7 @@ class TrainingPanel(QWidget):
         self.lr_spin.setSingleStep(0.0001)
         hg.addWidget(self.lr_spin, 2, 1)
 
-        hg.addWidget(QLabel("Sequence Length:"), 3, 0)
+        hg.addWidget(help_ui.labelled("Sequence Length:", 'sequence_length'), 3, 0)
         self.seq_spin = QSpinBox()
         self.seq_spin.setRange(5, 200)
         self.seq_spin.setValue(40)
@@ -116,7 +120,7 @@ class TrainingPanel(QWidget):
         self.batch_spin.setValue(32)
         hg.addWidget(self.batch_spin, 4, 1)
 
-        hg.addWidget(QLabel("Time Alignment:"), 5, 0)
+        hg.addWidget(help_ui.labelled("Time Alignment:", 'time_alignment'), 5, 0)
         self.align_combo = QComboBox()
         self.align_combo.addItems(list(ALIGNMENT_METHODS.keys()))
         hg.addWidget(self.align_combo, 5, 1)
@@ -126,7 +130,8 @@ class TrainingPanel(QWidget):
         # --- Buttons ---
         btn_layout = QHBoxLayout()
         self.train_btn = QPushButton("Start Training")
-        self.train_btn.setStyleSheet("font-weight: bold; padding: 8px;")
+        icons.decorate_accent(self.train_btn, 'play')
+        self.train_btn.setProperty("accent", True)
         self.train_btn.clicked.connect(self._start_training)
         btn_layout.addWidget(self.train_btn)
 
@@ -152,6 +157,7 @@ class TrainingPanel(QWidget):
 
         # Log
         self.log = QTextEdit()
+        self.log.setProperty("log", True)
         self.log.setReadOnly(True)
         self.log.setMaximumHeight(120)
         layout.addWidget(self.log)

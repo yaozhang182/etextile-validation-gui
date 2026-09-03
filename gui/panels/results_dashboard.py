@@ -16,6 +16,20 @@ from PyQt6.QtGui import QColor
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from gui import help as help_ui, icons
+
+
+def _abbreviate(joint_name):
+    """
+    Shorten a joint name for a cramped axis label.
+
+    "Right Shoulder Flexion" does not fit under a narrow heatmap column even
+    rotated, and the full names are already listed in the metrics table above.
+    """
+    words = str(joint_name).split()
+    short = {'right': 'R', 'left': 'L'}
+    return ' '.join(short.get(w.lower(), w) for w in words)
+
 
 class ResultsDashboardPanel(QWidget):
     def __init__(self, state):
@@ -29,13 +43,19 @@ class ResultsDashboardPanel(QWidget):
         inner = QWidget()
         layout = QVBoxLayout(inner)
 
+        headline_row = QHBoxLayout()
         self.info_label = QLabel("Train a model in Tab 4 first.")
-        self.info_label.setStyleSheet("font-size: 14px;")
-        layout.addWidget(self.info_label)
+        self.info_label.setProperty("headline", True)
+        headline_row.addWidget(self.info_label)
+        help_ui.attach(headline_row, 'headline_metrics')
+        headline_row.addStretch()
+        layout.addLayout(headline_row)
 
         # --- Per-subject breakdown ---
         self.subject_group = QGroupBox("Per-Subject Results (test)")
         sg = QVBoxLayout(self.subject_group)
+        sg.addWidget(help_ui.labelled(
+            "Each test session scored on its own", 'per_subject'))
         self.subject_table = QTableWidget()
         self.subject_table.setMaximumHeight(150)
         sg.addWidget(self.subject_table)
@@ -44,24 +64,39 @@ class ResultsDashboardPanel(QWidget):
         # --- Metrics table ---
         metrics_group = QGroupBox("Metrics Summary (pooled over test subjects)")
         mg = QVBoxLayout(metrics_group)
+        mg.addWidget(help_ui.labelled(
+            "The last column qualifies all the others",
+            'tracking_conf_column'))
         self.metrics_table = QTableWidget()
-        self.metrics_table.setMaximumHeight(180)
+        self.metrics_table.setMinimumHeight(150)
+        self.metrics_table.setMaximumHeight(240)
         mg.addWidget(self.metrics_table)
         layout.addWidget(metrics_group)
 
         # --- Plots ---
         # Error heatmap + Sensor importance side by side
         row1 = QHBoxLayout()
-        self.fig_heatmap = Figure(figsize=(5, 3))
+        self.fig_heatmap = Figure(figsize=(5, 3.2))
         self.ax_heatmap = self.fig_heatmap.add_subplot(111)
         self.canvas_heatmap = FigureCanvas(self.fig_heatmap)
+        # Without a floor the layout squeezes this row until tight_layout has to
+        # clip the title and the rotated joint labels.
+        self.canvas_heatmap.setMinimumHeight(240)
         row1.addWidget(self.canvas_heatmap)
 
-        self.fig_importance = Figure(figsize=(5, 3))
+        self.fig_importance = Figure(figsize=(5, 3.2))
         self.ax_importance = self.fig_importance.add_subplot(111)
         self.canvas_importance = FigureCanvas(self.fig_importance)
+        self.canvas_importance.setMinimumHeight(240)
         row1.addWidget(self.canvas_importance)
         layout.addLayout(row1)
+
+        importance_row = QHBoxLayout()
+        importance_row.addStretch()
+        importance_row.addWidget(help_ui.labelled(
+            "What sensor importance tells you about the layout",
+            'sensor_importance'))
+        layout.addLayout(importance_row)
 
         # Prediction curves
         self.fig_pred = Figure(figsize=(10, 4))
@@ -70,15 +105,15 @@ class ResultsDashboardPanel(QWidget):
 
         # --- Export buttons ---
         export_layout = QHBoxLayout()
-        btn_csv = QPushButton("Export Metrics CSV")
+        btn_csv = icons.decorate(QPushButton("Export Metrics CSV"), 'download')
         btn_csv.clicked.connect(self._export_csv)
         export_layout.addWidget(btn_csv)
 
-        btn_report = QPushButton("Export Report")
+        btn_report = icons.decorate(QPushButton("Export Report"), 'download')
         btn_report.clicked.connect(self._export_report)
         export_layout.addWidget(btn_report)
 
-        btn_plots = QPushButton("Save All Plots")
+        btn_plots = icons.decorate(QPushButton("Save All Plots"), 'download')
         btn_plots.clicked.connect(self._save_plots)
         export_layout.addWidget(btn_plots)
         layout.addLayout(export_layout)
@@ -202,7 +237,13 @@ class ResultsDashboardPanel(QWidget):
         self.metrics_table.resizeColumnsToContents()
 
     def _plot_heatmap(self, metrics):
-        self.ax_heatmap.clear()
+        # Rebuild the whole figure rather than clearing the axes. seaborn adds
+        # its colourbar as a NEW axes on the figure, and ax.clear() does not
+        # remove it — so refreshing this tab stacked up one extra colourbar per
+        # visit. clf() drops them all.
+        self.fig_heatmap.clf()
+        self.ax_heatmap = self.fig_heatmap.add_subplot(111)
+
         joint_names = list(metrics['MPJAE_per_joint'].keys())
         values = [metrics['MPJAE_per_joint'][j] for j in joint_names]
         error_matrix = np.array(values).reshape(1, -1)
@@ -210,10 +251,15 @@ class ResultsDashboardPanel(QWidget):
         import seaborn as sns
         sns.heatmap(
             error_matrix, annot=True, fmt=".1f", cmap="Reds",
-            xticklabels=joint_names, yticklabels=['Test'],
+            xticklabels=[_abbreviate(j) for j in joint_names],
+            yticklabels=['Test'],
             cbar_kws={'label': 'MPJAE (deg)'}, vmin=0, ax=self.ax_heatmap,
         )
-        self.ax_heatmap.set_title("Error Heatmap", fontsize=11, fontweight='bold')
+        # Long joint names need room; horizontal labels would be unreadable.
+        self.ax_heatmap.set_xticklabels(
+            self.ax_heatmap.get_xticklabels(), rotation=25, ha='right'
+        )
+        self.ax_heatmap.set_title("Error Heatmap", fontweight='bold')
         self.fig_heatmap.tight_layout()
         self.canvas_heatmap.draw()
 

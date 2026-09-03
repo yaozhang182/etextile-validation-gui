@@ -47,6 +47,16 @@ hiddenimports += ['matplotlib.backends.backend_qtagg']
 # --- Application resources --------------------------------------------------
 datas += [(os.path.join(project_root, 'config'), 'config')]
 
+# The stylesheet is a data file, not an import, so PyInstaller will not find it
+# on its own. Without it the app starts unstyled — gui/theme.py degrades rather
+# than crashing, and app.py --selftest asserts it is present so CI catches this.
+datas += [(os.path.join(project_root, 'gui', 'style.qss'), 'gui')]
+
+# Icon SVGs, same reasoning. gui/icons.py returns an empty QIcon if they are
+# missing, so a lost datas entry costs blank buttons rather than a crash — which
+# is exactly why CI checks for them explicitly.
+datas += [(os.path.join(project_root, 'gui', 'icons'), os.path.join('gui', 'icons'))]
+
 a = Analysis(
     [os.path.join(project_root, 'app.py')],
     pathex=[project_root],

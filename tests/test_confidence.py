@@ -167,9 +167,16 @@ def test_low_confidence_channels_are_styled_as_a_warning():
     w.tab_comparison.refresh()
 
     boxes = w.tab_comparison.angle_checkboxes
-    assert 'c62828' in boxes['left_elbow_flexion'].styleSheet(), "should be flagged red"
-    assert not boxes['right_elbow_flexion'].styleSheet(), "should be unstyled"
+    # Styling moved from inline stylesheets to a QSS property selector, so the
+    # flag is now carried by the property that style.qss keys off.
+    assert boxes['left_elbow_flexion'].property('lowConfidence') is True
+    assert boxes['right_elbow_flexion'].property('lowConfidence') is False
     assert str(LOW_CONFIDENCE) in boxes['left_elbow_flexion'].toolTip()
+
+    # The property is only meaningful if the stylesheet actually targets it.
+    from gui.theme import build_stylesheet
+    assert 'lowConfidence' in build_stylesheet(), \
+        "style.qss has no rule for the lowConfidence property"
 
 
 def main():

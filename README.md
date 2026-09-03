@@ -8,6 +8,10 @@ per-joint accuracy — no motion-capture lab, no programming.
 Five tabs, left to right: **Data Import → Skeleton Viewer → Angles & Sensors →
 Training → Performance Dashboard**.
 
+📘 **[Read the user manual](docs/manual.md)** — input format, every tab and
+control explained, with screenshots and troubleshooting. Also reachable from
+inside the app: **Help → User Manual** (`F1`), or the **?** on any tab.
+
 ## Choosing training and test data
 
 Training and test data are managed separately in Tab 1. Each list holds
@@ -111,5 +115,5 @@ matplotlib rebuilds its font cache on network home directories.
 | `input_data/examples_data/` | four example recording sessions |
 | `benchmarks/` | stage-by-stage timing harness |
 | `packaging/` | PyInstaller spec for the Windows build |
-| `paper/` | LaTeX manuscript |
+| `external/data_collection/` | reference scripts for recording video + sensor data on one clock |
 | `tests/` | regression tests |

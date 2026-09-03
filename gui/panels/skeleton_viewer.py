@@ -13,6 +13,8 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from gui.state import get_subjects
+from gui.plot_style import style_3d_axes
+from gui import help as help_ui, icons
 
 # SMPLH bone connections for skeleton wireframe
 SKELETON_BONES = [
@@ -64,25 +66,28 @@ class SkeletonViewerPanel(QWidget):
         top.addWidget(self.subject_combo)
         top.addStretch()
 
-        self.quality_btn = QPushButton("Tracking Quality...")
+        self.quality_btn = icons.decorate(
+            QPushButton("Tracking Quality..."), 'triangle-alert')
         self.quality_btn.setToolTip(
             "How confident MediaPipe is in the body landmarks it produced, and "
             "which joint angles that makes unreliable."
         )
         self.quality_btn.clicked.connect(self._show_quality)
         top.addWidget(self.quality_btn)
+        help_ui.attach(top, 'joint_colours')
         layout.addLayout(top)
 
         # Matplotlib figure with two subplots: video frame + 3D skeleton
         self.fig = Figure(figsize=(12, 5))
         self.ax_video = self.fig.add_subplot(121)
         self.ax_skeleton = self.fig.add_subplot(122, projection='3d')
+        style_3d_axes(self.ax_skeleton)   # mplot3d ignores rcParams
         self.canvas = FigureCanvas(self.fig)
         layout.addWidget(self.canvas)
 
         # Controls
         ctrl = QHBoxLayout()
-        self.play_btn = QPushButton("Play")
+        self.play_btn = icons.decorate(QPushButton("Play"), 'play')
         self.play_btn.clicked.connect(self._toggle_play)
         ctrl.addWidget(self.play_btn)
 
@@ -229,9 +234,11 @@ class SkeletonViewerPanel(QWidget):
             self._playing = False
             self._timer.stop()
             self.play_btn.setText("Play")
+            icons.decorate(self.play_btn, 'play')
         else:
             self._playing = True
             self.play_btn.setText("Pause")
+            icons.decorate(self.play_btn, 'pause')
             subject = self._current_subject()
             skeleton = subject.get('skeleton') if subject else None
             fps = skeleton['fps'] if skeleton else 25
@@ -322,6 +329,7 @@ class SkeletonViewerPanel(QWidget):
         # matplotlib 3D:   X=right,      Z=up, Y=depth
         # Swap data Y↔Z so the person stands upright in the plot.
         self.ax_skeleton.clear()
+        style_3d_axes(self.ax_skeleton)
         if frame_idx < len(smplh):
             joints = smplh[frame_idx]  # (22, 3)
             if not np.any(np.isnan(joints)):

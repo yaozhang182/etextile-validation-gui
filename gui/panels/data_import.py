@@ -15,9 +15,10 @@ from PyQt6.QtWidgets import (
     QGroupBox, QTextEdit, QMessageBox, QDialog, QDialogButtonBox,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
 )
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
 from gui.state import make_subject, get_subjects, next_subject_id
+from gui import help as help_ui, icons
 
 VIDEO_FILTER = "Video (*.mp4 *.avi *.mov)"
 CSV_FILTER = "CSV (*.csv)"
@@ -104,10 +105,9 @@ class AddSubjectDialog(QDialog):
         self.setMinimumWidth(640)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(
-            "A subject is one recording session. All three files must share the "
-            "same global clock."
-        ))
+        layout.addWidget(help_ui.labelled(
+            "A subject is one recording session — all three files must share "
+            "the same clock", 'subject_files'))
 
         grid = QGridLayout()
 
@@ -121,8 +121,18 @@ class AddSubjectDialog(QDialog):
 
         layout.addLayout(grid)
 
+        # Validation results. Problems are shown here, before the subject is
+        # accepted, instead of surfacing minutes later during extraction.
+        self.report = QTextEdit()
+        self.report.setReadOnly(True)
+        self.report.setMinimumHeight(120)
+        self.report.setVisible(False)
+        layout.addWidget(self.report)
+
+        # Sits under the report, so "above" refers to what the user just read.
         self.hint = QLabel("")
-        self.hint.setStyleSheet("color: #888;")
+        self.hint.setProperty("hint", True)
+        self.hint.setWordWrap(True)
         layout.addWidget(self.hint)
 
         self.buttons = QDialogButtonBox(
@@ -132,6 +142,7 @@ class AddSubjectDialog(QDialog):
         self.buttons.rejected.connect(self.reject)
         layout.addWidget(self.buttons)
 
+        self.findings = []
         self.id_edit.textChanged.connect(self._validate)
         self._validate()
 
@@ -152,19 +163,43 @@ class AddSubjectDialog(QDialog):
             self._validate()
 
     def _validate(self):
-        """OK stays disabled until all three files and an ID are provided."""
+        """
+        Check the selection and report on it.
+
+        OK needs all three files, an ID, and no blocking problem. Catching a bad
+        file here is the whole point: the alternative is a pandas traceback part
+        way through a multi-minute extraction.
+        """
+        ok_button = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
         complete = bool(
             self.id_edit.text().strip()
             and self.video_edit.text()
             and self.sensor_edit.text()
             and self.times_edit.text()
         )
-        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(complete)
 
-        if complete and angle_cache_path(self.video_edit.text()).exists():
-            self.hint.setText(cache_description(self.video_edit.text()))
-        elif not complete:
+        if not complete:
+            ok_button.setEnabled(False)
+            self.report.setVisible(False)
+            self.findings = []
             self.hint.setText("All three files are required.")
+            return
+
+        from core.validation import validate_session, has_errors, format_findings
+
+        self.findings = validate_session(
+            self.video_edit.text(), self.sensor_edit.text(), self.times_edit.text()
+        )
+        blocked = has_errors(self.findings)
+        ok_button.setEnabled(not blocked)
+
+        self.report.setVisible(bool(self.findings))
+        self.report.setHtml(format_findings(self.findings))
+
+        if blocked:
+            self.hint.setText("Fix the problem above before continuing.")
+        elif angle_cache_path(self.video_edit.text()).exists():
+            self.hint.setText(cache_description(self.video_edit.text()))
         else:
             self.hint.setText("")
 
@@ -195,9 +230,11 @@ class DataImportPanel(QWidget):
         # --- Actions ---
         action_layout = QHBoxLayout()
         self.extract_btn = QPushButton("Extract Skeleton && Compute Angles")
-        self.extract_btn.setStyleSheet("font-weight: bold; padding: 8px;")
+        self.extract_btn.setProperty("accent", True)
+        icons.decorate_accent(self.extract_btn, 'cpu')
         self.extract_btn.clicked.connect(self._extract_all)
         action_layout.addWidget(self.extract_btn)
+        help_ui.attach(action_layout, 'extract')
         layout.addLayout(action_layout)
 
         self.progress_bar = QProgressBar()
@@ -208,6 +245,7 @@ class DataImportPanel(QWidget):
         layout.addWidget(self.progress_label)
 
         self.preview = QTextEdit()
+        self.preview.setProperty("log", True)
         self.preview.setReadOnly(True)
         self.preview.setMaximumHeight(160)
         layout.addWidget(self.preview)
@@ -216,6 +254,12 @@ class DataImportPanel(QWidget):
         group = QGroupBox(f"{split.capitalize()}ing Subjects" if split == 'train'
                           else "Test Subjects")
         vbox = QVBoxLayout(group)
+        vbox.addWidget(help_ui.labelled(
+            "One subject = one recording session (video + sensor + timestamps)"
+            if split == 'train' else
+            "Held back from training; used only to score the model",
+            'train_subjects' if split == 'train' else 'test_subjects',
+        ))
 
         table = QTableWidget(0, 6)
         table.setHorizontalHeaderLabels(
@@ -231,11 +275,11 @@ class DataImportPanel(QWidget):
         self.tables[split] = table
 
         btns = QHBoxLayout()
-        add_btn = QPushButton("+ Add Subject")
+        add_btn = icons.decorate(QPushButton("Add Subject"), 'plus')
         add_btn.clicked.connect(lambda _, s=split: self._add_subject(s))
         btns.addWidget(add_btn)
 
-        rm_btn = QPushButton("Remove Selected")
+        rm_btn = icons.decorate(QPushButton("Remove Selected"), 'trash-2')
         rm_btn.clicked.connect(lambda _, s=split: self._remove_subject(s))
         btns.addWidget(rm_btn)
         btns.addStretch()
@@ -261,6 +305,22 @@ class DataImportPanel(QWidget):
 
         subject = make_subject(subject_id, video, sensor, times)
 
+        from core.validation import (
+            validate_session, has_errors, format_findings, WARNING,
+        )
+
+        # The dialog already validated, but re-check: it is the only guard, and
+        # the files could have changed underneath it.
+        findings = validate_session(video, sensor, times)
+        if has_errors(findings):
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Icon.Critical)
+            box.setWindowTitle("Cannot use these files")
+            box.setTextFormat(Qt.TextFormat.RichText)
+            box.setText(format_findings(findings))
+            box.exec()
+            return
+
         try:
             subject['sensor_df'] = read_csv_auto(sensor)
             subject['video_df'] = read_csv_auto(times)
@@ -268,17 +328,13 @@ class DataImportPanel(QWidget):
             QMessageBox.critical(self, "Cannot Read CSV", str(e))
             return
 
-        if 'EpochTime' not in subject['video_df'].columns:
-            QMessageBox.warning(
-                self, "Missing Column",
-                f"{Path(times).name} has no 'EpochTime' column, which is needed to "
-                f"align the sensor stream with the video."
-            )
-
         get_subjects(self.state, split).append(subject)
         self._load_cached_angles(subject)
         self._refresh_table(split)
         self._describe(split, subject)
+        for f in findings:
+            if f.level == WARNING:
+                self.preview.append(f"  ! {f.title}: {f.detail}")
 
     def _remove_subject(self, split):
         table = self.tables[split]

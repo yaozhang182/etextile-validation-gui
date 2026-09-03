@@ -48,6 +48,28 @@ jobs:
             exit 1
           fi
 
+      - name: Verify the stylesheet was bundled
+        shell: bash
+        run: |
+          # style.qss is a data file; if the spec's datas entry is lost the app
+          # still starts but looks unstyled, which is easy to miss in a zip.
+          found=$(find dist/ETextileValidation -name 'style.qss' | wc -l)
+          echo "style.qss files found: $found"
+          if [ "$found" -eq 0 ]; then
+            echo "::error::gui/style.qss missing from the bundle"
+            exit 1
+          fi
+
+      - name: Verify the icons were bundled
+        shell: bash
+        run: |
+          found=$(find dist/ETextileValidation -name 'circle-help.svg' | wc -l)
+          echo "icon svgs found: $found"
+          if [ "$found" -eq 0 ]; then
+            echo "::error::gui/icons missing from the bundle"
+            exit 1
+          fi
+
       - name: Self-test the packaged executable
         shell: bash
         run: |

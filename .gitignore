@@ -15,6 +15,14 @@ external/BodyPoseEstimation/
 # Machine-local Claude Code permissions (contains local paths)
 .claude/settings.local.json
 
+# --- Not part of the released tool -----------------------------------------
+# The repository is the software. These are our own working materials and stay
+# local: the manuscript, the submission bundle (which includes confidential peer
+# review), and internal planning notes.
+paper/
+paper_template/
+project_plan/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -42,3 +50,6 @@ paper/*.synctex.gz
 # OS
 .DS_Store
 __MACOSX/
+
+# Throwaway UI comparison renders for review
+ui_review/

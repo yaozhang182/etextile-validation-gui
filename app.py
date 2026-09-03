@@ -99,7 +99,14 @@ def selftest():
     def build_window():
         from PyQt6.QtWidgets import QApplication
         from gui.main_window import MainWindow
+        from gui.theme import apply_theme, build_stylesheet
         app = QApplication.instance() or QApplication([])
+        # A stylesheet that fails to load is a packaging bug: style.qss is a
+        # data file and PyInstaller drops it unless it is in the spec's datas.
+        assert build_stylesheet(), "style.qss missing from the bundle"
+        from gui import icons
+        assert icons.available(), "gui/icons missing from the bundle"
+        apply_theme(app)
         w = MainWindow()
         for tab in (w.tab_import, w.tab_skeleton, w.tab_comparison,
                     w.tab_training, w.tab_results):
@@ -123,10 +130,12 @@ def main():
 
     from PyQt6.QtWidgets import QApplication
     from gui.main_window import MainWindow
+    from gui.theme import apply_theme
 
     app = QApplication(sys.argv)
     app.setApplicationName("E-Textile Validation GUI")
     app.setApplicationVersion(__version__)
+    apply_theme(app)
 
     window = MainWindow()
     window.show()
