@@ -382,10 +382,14 @@ def test_rebuilding_the_sensor_list_leaves_no_ghost_widgets():
     assert empties == [1, 1, 1], empties
 
 
-def test_dashboard_refresh_does_not_accumulate_colorbars():
+def test_dashboard_refresh_does_not_accumulate_axes():
     """
-    seaborn adds its colourbar as a new axes and ax.clear() does not remove it,
-    so every visit to the Results tab used to add another colourbar.
+    Revisiting the Results tab must not stack figures up.
+
+    This started as a seaborn colourbar leak on the error heatmap — seaborn adds
+    its colourbar as a new axes and ax.clear() does not remove it. The heatmap is
+    gone, but the prediction figure builds one subplot per channel on every
+    refresh, so the same class of leak is one missing clear() away.
     """
     def metrics(n):
         joints = [f'J{i}' for i in range(n)]
@@ -407,11 +411,12 @@ def test_dashboard_refresh_does_not_accumulate_colorbars():
     for _ in range(4):
         w.tab_results.refresh()
         _app.processEvents()
-        counts.append(len(w.tab_results.fig_heatmap.axes))
+        counts.append((len(w.tab_results.fig_pred.axes),
+                       len(w.tab_results.fig_importance.axes)))
 
     assert len(set(counts)) == 1, f"axes count grew across refreshes: {counts}"
-    # one for the heatmap, one for its colourbar
-    assert counts[0] == 2, counts
+    # one prediction panel per channel, one bar chart
+    assert counts[0] == (3, 1), counts
 
 
 def _loaded_window():

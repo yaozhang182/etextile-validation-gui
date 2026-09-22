@@ -320,9 +320,10 @@ what the model predicts, and what it predicts from.
 | Control | What it does |
 |---|---|
 | **Data** / **Subject** | which session the plots show |
-| **Joint Angles (targets)** | the angles the model will predict — grouped by body part |
-| **All** / **None** / **Shoulder** | quick selection |
-| **Sensor Channels (inputs)** | which garment channels the model may use |
+| **Joint Angles (targets)** | the 26 angles the model can predict, grouped by body part — scroll the list to reach them all |
+| **All** / **None** / **Shoulder** | quick selection, under the angle list |
+| **Sensor Channels (inputs)** | which garment channels the model may use — one tickbox per channel, also scrollable |
+| **All** / **None** | quick selection, under the sensor list |
 | Upper plot | the selected joint angles over time |
 | Lower plot | the selected sensor channels, on the same time axis |
 
@@ -499,9 +500,8 @@ What each one is:
 | Headline | overall MPJAE, AMPE, RMSE, PCC |
 | **Per-Subject Results** | the same metrics for each test session separately (shown when there are several) |
 | **Metrics Summary** | per-joint metrics, plus the ground truth's tracking confidence |
-| Error heatmap | per-joint error at a glance |
-| Sensor importance | which channels the model relied on |
-| Prediction vs Ground Truth | predicted and true angle traces per joint |
+| **Prediction vs Ground Truth** | one panel per predicted channel: the true angle trace in black, the model's in red |
+| **Sensor Importance** | which channels the model relied on |
 | **Export Metrics CSV** | the metrics table as CSV |
 | **Export Report** | a text summary |
 | **Save All Plots** | the figures as PNGs |
@@ -509,7 +509,13 @@ What each one is:
 Check the **per-subject** table before the pooled numbers: one unusual wearer can
 carry the average.
 
-**Sensor importance** is what feeds back into garment design — a channel with
+**Prediction vs Ground Truth** is the figure to judge the garment by. The tables
+give one number per channel; the curves show *where* the error is — a constant
+offset, drift over the recording, or a particular movement the sensors miss
+entirely. The tab scrolls, so keep going down for the sensor chart and the
+export buttons.
+
+**Sensor Importance** is what feeds back into garment design — a channel with
 near-zero importance is not contributing and could be moved or removed.
 
 ### Reading the numbers

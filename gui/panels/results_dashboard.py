@@ -1,6 +1,13 @@
 """
-Tab 5: Results Dashboard — Metrics table, heatmap, sensor importance,
-prediction curves, export.
+Tab 5: Results Dashboard — Metrics tables, prediction curves, sensor
+importance, export.
+
+The per-joint error heatmap that used to sit here was dropped: it was a single
+row of numbers already printed in the metrics table right above it, so it spent
+half the width restating what the reader had just read. The prediction-vs-ground-
+truth curves take that space instead — they are the figure people actually read
+to judge whether the garment tracks the movement — and sensor importance sits
+below them at the size a ten-bar chart needs.
 """
 
 import numpy as np
@@ -10,25 +17,12 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QFileDialog, QGroupBox, QMessageBox,
     QScrollArea,
 )
-from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from gui import help as help_ui, icons
-
-
-def _abbreviate(joint_name):
-    """
-    Shorten a joint name for a cramped axis label.
-
-    "Right Shoulder Flexion" does not fit under a narrow heatmap column even
-    rotated, and the full names are already listed in the metrics table above.
-    """
-    words = str(joint_name).split()
-    short = {'right': 'R', 'left': 'L'}
-    return ' '.join(short.get(w.lower(), w) for w in words)
 
 
 class ResultsDashboardPanel(QWidget):
@@ -73,35 +67,37 @@ class ResultsDashboardPanel(QWidget):
         mg.addWidget(self.metrics_table)
         layout.addWidget(metrics_group)
 
-        # --- Plots ---
-        # Error heatmap + Sensor importance side by side
-        row1 = QHBoxLayout()
-        self.fig_heatmap = Figure(figsize=(5, 3.2))
-        self.ax_heatmap = self.fig_heatmap.add_subplot(111)
-        self.canvas_heatmap = FigureCanvas(self.fig_heatmap)
-        # Without a floor the layout squeezes this row until tight_layout has to
-        # clip the title and the rotated joint labels.
-        self.canvas_heatmap.setMinimumHeight(240)
-        row1.addWidget(self.canvas_heatmap)
+        # --- Prediction curves: the headline figure, full width ---
+        pred_group = QGroupBox("Prediction vs Ground Truth")
+        pg = QVBoxLayout(pred_group)
+        pg.addWidget(help_ui.labelled(
+            "One panel per predicted channel, over the test recording",
+            'prediction_curves'))
+        self.fig_pred = Figure(figsize=(11, 5.6))
+        self.canvas_pred = FigureCanvas(self.fig_pred)
+        # One row of small-multiples needs roughly this much to stay readable;
+        # more channels add rows and the scroll area takes up the slack.
+        self.canvas_pred.setMinimumHeight(430)
+        pg.addWidget(self.canvas_pred)
+        layout.addWidget(pred_group)
 
-        self.fig_importance = Figure(figsize=(5, 3.2))
-        self.ax_importance = self.fig_importance.add_subplot(111)
-        self.canvas_importance = FigureCanvas(self.fig_importance)
-        self.canvas_importance.setMinimumHeight(240)
-        row1.addWidget(self.canvas_importance)
-        layout.addLayout(row1)
-
-        importance_row = QHBoxLayout()
-        importance_row.addStretch()
-        importance_row.addWidget(help_ui.labelled(
+        # --- Sensor importance: a ten-bar chart, so kept modest ---
+        importance_group = QGroupBox("Sensor Importance")
+        ig = QVBoxLayout(importance_group)
+        ig.addWidget(help_ui.labelled(
             "What sensor importance tells you about the layout",
             'sensor_importance'))
-        layout.addLayout(importance_row)
-
-        # Prediction curves
-        self.fig_pred = Figure(figsize=(10, 4))
-        self.canvas_pred = FigureCanvas(self.fig_pred)
-        layout.addWidget(self.canvas_pred)
+        importance_row = QHBoxLayout()
+        self.fig_importance = Figure(figsize=(5.5, 2.4))
+        self.ax_importance = self.fig_importance.add_subplot(111)
+        self.canvas_importance = FigureCanvas(self.fig_importance)
+        self.canvas_importance.setMinimumHeight(200)
+        self.canvas_importance.setMaximumHeight(240)
+        self.canvas_importance.setMaximumWidth(640)
+        importance_row.addWidget(self.canvas_importance)
+        importance_row.addStretch()
+        ig.addLayout(importance_row)
+        layout.addWidget(importance_group)
 
         # --- Export buttons ---
         export_layout = QHBoxLayout()
@@ -139,9 +135,8 @@ class ResultsDashboardPanel(QWidget):
 
         self._fill_subject_table()
         self._fill_metrics_table(metrics)
-        self._plot_heatmap(metrics)
-        self._plot_sensor_importance()
         self._plot_predictions(metrics)
+        self._plot_sensor_importance()
 
     def reset(self):
         """Empty every table and figure so no stale result is left on screen."""
@@ -150,13 +145,11 @@ class ResultsDashboardPanel(QWidget):
             table.clearContents()
             table.setRowCount(0)
         self.subject_group.setVisible(False)
-        for figure, canvas in ((self.fig_heatmap, self.canvas_heatmap),
-                               (self.fig_importance, self.canvas_importance),
+        for figure, canvas in ((self.fig_importance, self.canvas_importance),
                                (self.fig_pred, self.canvas_pred)):
             figure.clf()
             canvas.draw()
-        # clf() dropped the axes these attributes referred to
-        self.ax_heatmap = self.fig_heatmap.add_subplot(111)
+        # clf() dropped the axes this attribute referred to
         self.ax_importance = self.fig_importance.add_subplot(111)
 
     def _fill_subject_table(self):
@@ -252,33 +245,6 @@ class ResultsDashboardPanel(QWidget):
 
         self.metrics_table.resizeColumnsToContents()
 
-    def _plot_heatmap(self, metrics):
-        # Rebuild the whole figure rather than clearing the axes. seaborn adds
-        # its colourbar as a NEW axes on the figure, and ax.clear() does not
-        # remove it — so refreshing this tab stacked up one extra colourbar per
-        # visit. clf() drops them all.
-        self.fig_heatmap.clf()
-        self.ax_heatmap = self.fig_heatmap.add_subplot(111)
-
-        joint_names = list(metrics['MPJAE_per_joint'].keys())
-        values = [metrics['MPJAE_per_joint'][j] for j in joint_names]
-        error_matrix = np.array(values).reshape(1, -1)
-
-        import seaborn as sns
-        sns.heatmap(
-            error_matrix, annot=True, fmt=".1f", cmap="Reds",
-            xticklabels=[_abbreviate(j) for j in joint_names],
-            yticklabels=['Test'],
-            cbar_kws={'label': 'MPJAE (deg)'}, vmin=0, ax=self.ax_heatmap,
-        )
-        # Long joint names need room; horizontal labels would be unreadable.
-        self.ax_heatmap.set_xticklabels(
-            self.ax_heatmap.get_xticklabels(), rotation=25, ha='right'
-        )
-        self.ax_heatmap.set_title("Error Heatmap", fontweight='bold')
-        self.fig_heatmap.tight_layout()
-        self.canvas_heatmap.draw()
-
     def _plot_sensor_importance(self):
         self.ax_importance.clear()
         model = self.state.get('model')
@@ -299,7 +265,6 @@ class ResultsDashboardPanel(QWidget):
             self.ax_importance.text(bar.get_x() + bar.get_width() / 2., bar.get_height(),
                                     f'{val:.3f}', ha='center', va='bottom', fontsize=9)
 
-        self.ax_importance.set_title("Sensor Importance", fontsize=11, fontweight='bold')
         self.ax_importance.set_ylabel("Weight")
         self.ax_importance.grid(axis='y', alpha=0.3)
         self.fig_importance.tight_layout()
@@ -329,7 +294,6 @@ class ResultsDashboardPanel(QWidget):
             if i == 0:
                 ax.legend(fontsize=7)
 
-        self.fig_pred.suptitle("Prediction vs Ground Truth", fontsize=12, fontweight='bold')
         self.fig_pred.tight_layout()
         self.canvas_pred.draw()
 
@@ -360,7 +324,6 @@ class ResultsDashboardPanel(QWidget):
         if not folder:
             return
         folder = Path(folder)
-        self.fig_heatmap.savefig(folder / 'error_heatmap.png', dpi=150, bbox_inches='tight')
         self.fig_importance.savefig(folder / 'sensor_importance.png', dpi=150, bbox_inches='tight')
         self.fig_pred.savefig(folder / 'prediction_curves.png', dpi=150, bbox_inches='tight')
         QMessageBox.information(self, "Saved", f"Plots saved to {folder}")

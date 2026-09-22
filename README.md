@@ -82,8 +82,8 @@ A local machine is much better for interactive use.
 4. Tab 3 → tick the joint angles to predict and the sensor channels to use. Each
    angle shows its tracking confidence; low ones are flagged red.
 5. Tab 4 → **Start Training** (defaults are fine).
-6. Tab 5 → per-joint MPJAE / AMPE / RMSE / PCC, error heatmap, sensor importance,
-   and predicted-vs-ground-truth curves.
+6. Tab 5 → per-joint MPJAE / AMPE / RMSE / PCC, predicted-vs-ground-truth
+   curves, and sensor importance.
 
 ## Command line
 
@@ -100,6 +100,8 @@ Headless, no display required, no training performed:
 ```bash
 QT_QPA_PLATFORM=offscreen PYTHONPATH=. python tests/test_multisubject.py
 QT_QPA_PLATFORM=offscreen PYTHONPATH=. python tests/test_confidence.py
+QT_QPA_PLATFORM=offscreen PYTHONPATH=. python tests/test_layout.py
+PYTHONPATH=. python tests/test_validation.py
 ```
 
 If `MainWindow` import appears to hang, set `MPLCONFIGDIR` to a local directory —

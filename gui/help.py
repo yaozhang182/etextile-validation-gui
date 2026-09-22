@@ -156,6 +156,16 @@ HELP = {
         "channel is a real result.",
         "#reading-the-numbers",
     ),
+    'prediction_curves': (
+        "Prediction vs ground truth",
+        "One panel per predicted channel, over the whole test recording. Black "
+        "is the ground truth from the video, red dashed is what the model "
+        "inferred from the sensors alone.<br><br>This is the figure to judge "
+        "the garment by: the tables give one number per channel, but only the "
+        "curves show <i>where</i> the error is — a constant offset, drift over "
+        "time, or a specific movement the sensors miss entirely.",
+        "#tab-5--results",
+    ),
     'sensor_importance': (
         "Sensor importance",
         "How much the trained model relied on each channel, from the first "
