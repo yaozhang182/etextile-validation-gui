@@ -56,3 +56,6 @@ ui_review/
 
 # Local screenshots taken while testing the app
 debug_screenshot/
+
+# User-study material, run locally and not part of the release
+study/

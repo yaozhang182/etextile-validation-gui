@@ -71,6 +71,86 @@ def _pin_scroll_content(scroll):
     inner.setMinimumHeight(layout.minimumSize().height())
 
 
+def _frame_epochs(video_df, n_frames):
+    """
+    Epoch timestamp for each extracted video frame.
+
+    The timestamps CSV is the authority on when each frame was taken — not the
+    frame index divided by a nominal rate, which assumes a perfectly constant
+    capture rate the camera does not deliver.
+
+    The CSV routinely holds one row fewer than the video has decoded frames, so
+    the trailing frame is extrapolated at the measured mean period rather than
+    left clamped on the last timestamp.
+    """
+    from core.data_alignment import find_timestamp_column
+
+    ts_col = find_timestamp_column(video_df)
+    if ts_col is None:
+        return None
+
+    epoch = np.asarray(video_df[ts_col].values, dtype=float)
+    if 'FrameIndex' in video_df.columns:
+        index = np.asarray(video_df['FrameIndex'].values, dtype=float)
+    else:
+        index = np.arange(len(epoch), dtype=float)
+    if len(epoch) < 2:
+        return None
+
+    want = np.arange(n_frames, dtype=float)
+    out = np.interp(want, index, epoch)
+
+    # np.interp clamps beyond the ends; continue at the measured rate instead.
+    period = (epoch[-1] - epoch[0]) / (index[-1] - index[0])
+    after = want > index[-1]
+    out[after] = epoch[-1] + (want[after] - index[-1]) * period
+    before = want < index[0]
+    out[before] = epoch[0] - (index[0] - want[before]) * period
+    return out
+
+
+def _shared_clock(subject, n_angle_frames):
+    """
+    Put the joint angles and the sensor stream on one time axis.
+
+    Both recordings are stamped with the same Unix clock, which is the whole
+    premise of the tool — but each stream starts when its own recorder was
+    started, and those moments differ by seconds. Plotting each as "seconds
+    since my own first sample" therefore slides one panel against the other by
+    exactly that difference, and a reader comparing the two by eye sees the
+    sensor responding before or after a movement that it was in fact tracking.
+
+    Returns (angle_t, sensor_t, aligned): seconds from the first sample of
+    whichever stream began first, so a vertical line means one instant in both
+    panels. ``aligned`` is true only when both streams supplied real timestamps
+    — the caller must not claim the panels are comparable otherwise.
+    """
+    from core.data_alignment import find_timestamp_column
+
+    video_df = subject.get('video_df') if subject else None
+    sensor_df = subject.get('sensor_df') if subject else None
+
+    angle_epoch = None
+    if video_df is not None and n_angle_frames:
+        angle_epoch = _frame_epochs(video_df, n_angle_frames)
+
+    sensor_epoch = None
+    if sensor_df is not None:
+        ts_col = find_timestamp_column(sensor_df)
+        if ts_col is not None:
+            sensor_epoch = np.asarray(sensor_df[ts_col].values, dtype=float)
+
+    starts = [e[0] for e in (angle_epoch, sensor_epoch) if e is not None and len(e)]
+    if not starts:
+        return None, None, False
+
+    origin = min(starts)
+    aligned = angle_epoch is not None and sensor_epoch is not None
+    return (None if angle_epoch is None else angle_epoch - origin,
+            None if sensor_epoch is None else sensor_epoch - origin,
+            aligned)
+
+
 def _clear_layout(layout):
     """
     Empty a layout, removing its widgets from the display immediately.
@@ -379,11 +459,27 @@ class AngleComparisonPanel(QWidget):
         ]
         self._update_plot()
 
+    @staticmethod
+    def _overlap(angle_time, sensor_time):
+        """The window both streams cover, which is all training can ever use."""
+        if (angle_time is None or sensor_time is None
+                or not len(angle_time) or not len(sensor_time)):
+            return None
+        start = max(angle_time[0], sensor_time[0])
+        stop = min(angle_time[-1], sensor_time[-1])
+        return (start, stop) if stop > start else None
+
     def _update_plot(self):
         subject = self._current_subject()
         angles = subject.get('angles') if subject else None
-        time = subject.get('time') if subject else None
         sensor_df = subject.get('sensor_df') if subject else None
+
+        # Both panels must read off one clock, or comparing them by eye is
+        # misleading — see _shared_clock.
+        n_frames = len(next(iter(angles.values()))) if angles else 0
+        angle_time, sensor_time, aligned = _shared_clock(subject, n_frames)
+        if angle_time is None:
+            angle_time = subject.get('time') if subject else None
 
         self.ax_angle.clear()
         self.ax_sensor.clear()
@@ -400,12 +496,14 @@ class AngleComparisonPanel(QWidget):
             self.canvas.draw()
             return
 
-        # Top: Joint angles (time is already relative, 0 to T/fps)
+        # Top: Joint angles, on the session clock
         if has_angles:
             for name in sel_angles:
                 if name in angles:
-                    vals = angles[name]
-                    t = time if time is not None else np.arange(len(vals))
+                    vals = np.asarray(angles[name], dtype=float)
+                    t = angle_time
+                    if t is None or len(t) != len(vals):
+                        t = np.arange(len(vals))
                     valid = ~np.isnan(vals)
                     self.ax_angle.plot(t[valid], vals[valid], label=name, linewidth=1)
             self.ax_angle.legend(loc='upper right', fontsize=7)
@@ -416,14 +514,9 @@ class AngleComparisonPanel(QWidget):
         self.ax_angle.set_title(title, fontsize=11)
         self.ax_angle.grid(True, alpha=0.3)
 
-        # Bottom: Sensor channels (convert EpochTime to relative seconds)
+        # Bottom: Sensor channels, on the same clock
         if has_sensors:
-            from core.data_alignment import find_timestamp_column
-            ts_col = find_timestamp_column(sensor_df)
-            if ts_col:
-                raw_time = sensor_df[ts_col].values
-                sensor_time = raw_time - raw_time[0]
-            else:
+            if sensor_time is None or len(sensor_time) != len(sensor_df):
                 sensor_time = np.arange(len(sensor_df))
 
             for col in sel_sensors:
@@ -432,12 +525,32 @@ class AngleComparisonPanel(QWidget):
                                        label=col, linewidth=1)
             self.ax_sensor.legend(loc='upper right', fontsize=7)
         self.ax_sensor.set_ylabel("Sensor Value", fontsize=10)
-        self.ax_sensor.set_xlabel("Time (s)", fontsize=10)
+        self.ax_sensor.set_xlabel(
+            "Time (s from the start of the recording session)" if aligned
+            else "Time — the two panels are NOT on a common clock",
+            fontsize=10)
         self.ax_sensor.grid(True, alpha=0.3)
 
         n_ang = len(sel_angles)
         n_sen = len(sel_sensors)
-        self.info_label.setText(f"Selected: {n_ang} angle(s), {n_sen} sensor(s)")
+        info = f"Selected: {n_ang} angle(s), {n_sen} sensor(s)"
+        warn = False
+        if has_angles and has_sensors:
+            if not aligned:
+                # Saying nothing here would leave the reader assuming the
+                # panels line up, which is the mistake this path exists for.
+                info += ("   ·   timestamps missing, so the two panels are"
+                         " not on a common clock — do not compare them"
+                         " by eye")
+                warn = True
+            else:
+                overlap = self._overlap(angle_time, sensor_time)
+                if overlap is not None:
+                    info += (f"   ·   both streams cover "
+                             f"{overlap[0]:.1f}–{overlap[1]:.1f} s — only"
+                             f" this window is used for training")
+        set_style_property(self.info_label, "warning", warn)
+        self.info_label.setText(info)
 
         self.fig.tight_layout()
         self.canvas.draw()

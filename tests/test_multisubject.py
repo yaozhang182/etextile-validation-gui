@@ -382,6 +382,100 @@ def test_rebuilding_the_sensor_list_leaves_no_ghost_widgets():
     assert empties == [1, 1, 1], empties
 
 
+def test_tab3_plots_both_streams_on_one_clock():
+    """
+    The two panels are read against each other by eye, so they must share a
+    time origin.
+
+    Each recorder starts when it is started, and those moments differ by
+    seconds. Plotting each stream as "seconds since my own first sample" slides
+    one panel against the other by exactly that difference, which makes a
+    sensor look like it responds before or after a movement it is in fact
+    tracking.
+    """
+    OFFSET = 5.0                      # the sensor logger started 5 s earlier
+    w = MainWindow()
+    s = fake_subject('S1', 200, 400, 1e9, sensor_t0=1e9 - OFFSET)
+    w.state['train_subjects'].append(s)
+    w.tab_comparison.refresh()
+
+    panel = w.tab_comparison
+    panel.angle_checkboxes['pelvis_flexion'].setChecked(True)
+    s['angles']['pelvis_flexion'] = s['angles']['a1']      # give it real values
+    panel._update_plot()
+
+    angle_x = panel.ax_angle.lines[0].get_xdata()
+    sensor_x = panel.ax_sensor.lines[0].get_xdata()
+
+    # Earlier stream defines zero, so the sensor starts at 0 and the video 5 s in.
+    assert abs(sensor_x[0] - 0.0) < 0.05, sensor_x[0]
+    assert abs(angle_x[0] - OFFSET) < 0.05, angle_x[0]
+    assert abs((angle_x[0] - sensor_x[0]) - OFFSET) < 0.05
+
+    # And the axis actually spans both, rather than one being cropped away.
+    assert panel.ax_angle.get_xlim() == panel.ax_sensor.get_xlim()
+
+
+def test_tab3_says_so_when_it_cannot_align_the_panels():
+    """
+    Without timestamps the panels cannot share a clock, and silence would let
+    the reader assume they do. The label must say otherwise, and the stylesheet
+    must have a rule for the property that marks it.
+    """
+    w = MainWindow()
+    s = fake_subject('S1', 200, 400, 1e9)
+    s['sensor_df'] = s['sensor_df'].drop(columns=['EpochTime'])
+    w.state['train_subjects'].append(s)
+    w.tab_comparison.refresh()
+
+    panel = w.tab_comparison
+    s['angles']['pelvis_flexion'] = s['angles']['a1']
+    panel.angle_checkboxes['pelvis_flexion'].setChecked(True)
+    panel._update_plot()
+
+    assert 'not on a common clock' in panel.info_label.text(), panel.info_label.text()
+    assert panel.info_label.property('warning') is True
+    assert 'NOT on a common clock' in panel.ax_sensor.get_xlabel()
+
+    from gui.theme import build_stylesheet
+    assert 'warning' in build_stylesheet(), "style.qss has no rule for the warning property"
+
+    # ...and it must go away again once a well-formed subject is selected.
+    good = fake_subject('S2', 200, 400, 1e9)
+    good['angles']['pelvis_flexion'] = good['angles']['a1']
+    w.state['train_subjects'].append(good)
+    panel.refresh()
+    panel.subject_combo.setCurrentIndex(1)
+    panel.angle_checkboxes['pelvis_flexion'].setChecked(True)
+    panel._update_plot()
+    assert panel.info_label.property('warning') is False, panel.info_label.text()
+    assert 'both streams cover' in panel.info_label.text(), panel.info_label.text()
+
+
+def test_tab3_angle_times_come_from_the_timestamps_not_a_nominal_fps():
+    """
+    Frame index over a nominal rate assumes a capture rate the camera does not
+    deliver; the per-frame timestamps are the authority.
+    """
+    from gui.panels.angle_comparison import _frame_epochs
+
+    # A camera that ran 20% slower than the nominal 30 fps it reports.
+    n = 100
+    real = 1e9 + np.arange(n) / 25.0
+    video_df = pd.DataFrame({'FrameIndex': np.arange(n), 'EpochTime': real})
+
+    got = _frame_epochs(video_df, n)
+    assert np.allclose(got, real), "timestamps should be used verbatim"
+
+    # One more frame than the CSV has rows — the usual off-by-one — must be
+    # extrapolated at the measured period, not clamped onto the last row.
+    got = _frame_epochs(video_df, n + 1)
+    assert len(got) == n + 1
+    # A microsecond of slack: float64 resolves to about 1e-7 s at Unix-epoch
+    # magnitude, which is seven orders below anything that matters at 30 fps.
+    assert abs((got[-1] - got[-2]) - 1 / 25.0) < 1e-6, got[-1] - got[-2]
+
+
 def test_dashboard_refresh_does_not_accumulate_axes():
     """
     Revisiting the Results tab must not stack figures up.

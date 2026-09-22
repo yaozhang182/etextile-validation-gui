@@ -286,6 +286,7 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 QLabel { background: transparent; }
 QLabel[hint="true"]    { color: {{TEXT_MUTED}}; font-size: {{SIZE_SMALL}}px; }
 QLabel[headline="true"] { font-size: {{SIZE_TITLE}}px; font-weight: 600; }
+QLabel[warning="true"] { color: {{DANGER}}; font-weight: 600; }
 QLabel[metric="true"]  {
     font-family: {{FONT_MONO}};
     font-size: {{SIZE_TITLE}}px;

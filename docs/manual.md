@@ -343,6 +343,13 @@ rather than all 26; a focused model trains faster and is easier to interpret.
 works at all: if a sensor trace visibly follows the angle trace, the model will
 find that relationship.
 
+Both plots are drawn on one clock — the seconds counted from whichever of the
+two recordings started first — so a point directly above another is the same
+instant, and you can compare the panels by eye. The video and the sensor logger
+are rarely started at the same moment, so one trace usually begins later than
+the other. The line under the plots gives the window both streams cover; only
+that window can be used for training.
+
 ### Joint angle definitions
 
 The 26 channels below are computed from the reconstructed skeleton following ISB
