@@ -35,6 +35,42 @@ ANGLE_GROUPS = {
 }
 
 
+def _pin_scroll_content(scroll):
+    """
+    Stop a scroll area from squeezing its contents instead of scrolling.
+
+    QScrollArea with setWidgetResizable(True) sets the inner widget's geometry
+    directly, and QWidget::setGeometry clamps only to an *explicit* minimum —
+    minimumSizeHint is advisory. So a list rebuilt while the tab is hidden keeps
+    the widget at the old (viewport) height, and its layout then compresses the
+    rows below their own minimum: ten 21px checkboxes rendered 11px tall, text
+    clipped to illegible stubs and nothing scrollable to reach the rest.
+
+    Pinning the explicit minimum to what the layout actually needs makes the
+    scrollbar appear, which is what a scroll area is for.
+
+    The rows must be made visible before they are measured, or the number this
+    pins is wrong in the one case that matters. A layout leaves hidden widgets
+    out of its minimum, and rows added while their tab is not current stay
+    hidden until the event loop shows them — so measuring there yields the
+    height of an empty column, and pinning that is worse than not pinning at
+    all, because it survives as an explicit minimum once the rows do appear.
+    """
+    inner = scroll.widget()
+    layout = inner.layout()
+
+    inner.ensurePolished()
+    for i in range(layout.count()):
+        child = layout.itemAt(i).widget()
+        if child is not None:
+            child.setVisible(True)
+            child.ensurePolished()
+
+    layout.invalidate()
+    layout.activate()
+    inner.setMinimumHeight(layout.minimumSize().height())
+
+
 def _clear_layout(layout):
     """
     Empty a layout, removing its widgets from the display immediately.
@@ -96,8 +132,12 @@ class AngleComparisonPanel(QWidget):
             "What the model will predict", 'angle_targets'))
         angle_header.addWidget(help_ui.labelled(
             "(0.00) = tracking confidence", 'angle_confidence'))
-        angle_scroll = QScrollArea()
+        angle_scroll = self.angle_scroll = QScrollArea()
         angle_scroll.setWidgetResizable(True)
+        # A QScrollArea's minimum size hint is tiny, so in a cramped column it is
+        # the first thing Qt shrinks — down to nothing, leaving only its
+        # scrollbar and no way to pick a target. Give it a floor.
+        angle_scroll.setMinimumHeight(200)
         angle_inner = QWidget()
         angle_layout = QVBoxLayout(angle_inner)
 
@@ -112,9 +152,10 @@ class AngleComparisonPanel(QWidget):
 
         angle_layout.addStretch()
         angle_scroll.setWidget(angle_inner)
+        _pin_scroll_content(angle_scroll)
         ag = QVBoxLayout()
         ag.addLayout(angle_header)
-        ag.addWidget(angle_scroll)
+        ag.addWidget(angle_scroll, stretch=1)
 
         # Quick select buttons for angles
         abtn = QHBoxLayout()
@@ -130,21 +171,44 @@ class AngleComparisonPanel(QWidget):
         ag.addLayout(abtn)
 
         angle_group.setLayout(ag)
-        left_panel.addWidget(angle_group)
+        left_panel.addWidget(angle_group, stretch=3)
 
         # Sensor channel checkboxes
         self.sensor_group = QGroupBox("Sensor Channels (inputs)")
         sensor_outer = QVBoxLayout(self.sensor_group)
         sensor_outer.addWidget(help_ui.labelled(
             "What the model may use as input", 'sensor_inputs'))
-        self.sensor_layout = QVBoxLayout()
-        sensor_outer.addLayout(self.sensor_layout)
+        # Scrolled for the same reason as the angles: a plain column of one
+        # checkbox per channel has no upper bound, and a garment with many
+        # channels would otherwise push the angle list off the panel.
+        sensor_scroll = self.sensor_scroll = QScrollArea()
+        sensor_scroll.setWidgetResizable(True)
+        sensor_scroll.setMinimumHeight(120)
+        sensor_inner = QWidget()
+        self.sensor_layout = QVBoxLayout(sensor_inner)
+        sensor_scroll.setWidget(sensor_inner)
+        sensor_outer.addWidget(sensor_scroll, stretch=1)
         self.sensor_layout.addWidget(QLabel("Load sensor data in Tab 1 first."))
-        left_panel.addWidget(self.sensor_group)
+        self.sensor_layout.addStretch()
+        _pin_scroll_content(sensor_scroll)
+
+        self.sensor_buttons = QWidget()
+        sbtn = QHBoxLayout(self.sensor_buttons)
+        sbtn.setContentsMargins(0, 0, 0, 0)
+        btn_sall = QPushButton("All")
+        btn_sall.clicked.connect(lambda: self._set_all_sensors(True))
+        btn_snone = QPushButton("None")
+        btn_snone.clicked.connect(lambda: self._set_all_sensors(False))
+        sbtn.addWidget(btn_sall)
+        sbtn.addWidget(btn_snone)
+        self.sensor_buttons.setVisible(False)
+        sensor_outer.addWidget(self.sensor_buttons)
+        left_panel.addWidget(self.sensor_group, stretch=2)
 
         left_widget = QWidget()
         left_widget.setLayout(left_panel)
-        left_widget.setMaximumWidth(300)
+        left_widget.setMinimumWidth(340)
+        left_widget.setMaximumWidth(380)
         layout.addWidget(left_widget)
 
         # --- Right: Plot area ---
@@ -162,6 +226,12 @@ class AngleComparisonPanel(QWidget):
         right_widget = QWidget()
         right_widget.setLayout(right_panel)
         layout.addWidget(right_widget, stretch=1)
+
+    def showEvent(self, event):
+        """Re-pin on show: metrics settle only once the tab is really visible."""
+        super().showEvent(event)
+        _pin_scroll_content(self.angle_scroll)
+        _pin_scroll_content(self.sensor_scroll)
 
     @property
     def _split(self):
@@ -258,8 +328,11 @@ class AngleComparisonPanel(QWidget):
         _clear_layout(self.sensor_layout)
 
         sensor_cols = common_sensor_columns(self.state)
+        self.sensor_buttons.setVisible(bool(sensor_cols))
         if not sensor_cols:
             self.sensor_layout.addWidget(QLabel("No sensor data loaded."))
+            self.sensor_layout.addStretch()
+            _pin_scroll_content(self.sensor_scroll)
             return
 
         mismatched = inconsistent_sensor_subjects(self.state)
@@ -271,22 +344,15 @@ class AngleComparisonPanel(QWidget):
             warn.setWordWrap(True)
             self.sensor_layout.addWidget(warn)
 
-        # Select all / none buttons
-        sbtn = QHBoxLayout()
-        btn_all = QPushButton("All")
-        btn_all.clicked.connect(lambda: self._set_all_sensors(True))
-        btn_none = QPushButton("None")
-        btn_none.clicked.connect(lambda: self._set_all_sensors(False))
-        sbtn.addWidget(btn_all)
-        sbtn.addWidget(btn_none)
-        self.sensor_layout.addLayout(sbtn)
-
         for col in sensor_cols:
             cb = QCheckBox(col)
             cb.setChecked(True)
             cb.stateChanged.connect(self._on_selection_changed)
             self.sensor_layout.addWidget(cb)
             self.sensor_checkboxes[col] = cb
+
+        self.sensor_layout.addStretch()
+        _pin_scroll_content(self.sensor_scroll)
 
     def _set_all_angles(self, checked):
         for cb in self.angle_checkboxes.values():
