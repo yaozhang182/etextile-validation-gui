@@ -59,3 +59,6 @@ debug_screenshot/
 
 # User-study material, run locally and not part of the release
 study/
+
+# Tutorial video build output (shots, audio, rendered mp4)
+docs/video/build/

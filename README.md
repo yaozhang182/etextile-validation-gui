@@ -2,6 +2,12 @@
 
 [![GitHub stars](https://img.shields.io/github/stars/yaozhang182/etextile-validation-gui?style=social)](https://github.com/yaozhang182/etextile-validation-gui/stargazers)
 [![Report a bug](https://img.shields.io/badge/report-a%20bug-d73a4a)](https://github.com/yaozhang182/etextile-validation-gui/issues/new)
+[![Tutorial video](https://img.shields.io/badge/tutorial-YouTube-red?logo=youtube)](https://www.youtube.com/watch?v=PFFmzeKfwpI)
+
+[![Watch the 5-minute tutorial on YouTube](docs/img/tutorial_thumbnail.jpg)](https://www.youtube.com/watch?v=PFFmzeKfwpI)
+
+▶ **[Watch the 5-minute tutorial](https://www.youtube.com/watch?v=PFFmzeKfwpI)** — the whole workflow, every tab and
+button, on the bundled example data.
 
 A no-code desktop tool for validating wearable motion-sensing garments. Give it a
 webcam recording and your garment's sensor CSV; it derives joint-angle ground
