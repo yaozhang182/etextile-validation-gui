@@ -1,5 +1,8 @@
 # E-Textile Validation GUI
 
+[![GitHub stars](https://img.shields.io/github/stars/yaozhang182/etextile-validation-gui?style=social)](https://github.com/yaozhang182/etextile-validation-gui/stargazers)
+[![Report a bug](https://img.shields.io/badge/report-a%20bug-d73a4a)](https://github.com/yaozhang182/etextile-validation-gui/issues/new)
+
 A no-code desktop tool for validating wearable motion-sensing garments. Give it a
 webcam recording and your garment's sensor CSV; it derives joint-angle ground
 truth from the video, trains a sensor-to-angle regression model, and reports
@@ -11,6 +14,11 @@ Training → Performance Dashboard**.
 📘 **[Read the user manual](docs/manual.md)** — input format, every tab and
 control explained, with screenshots and troubleshooting. Also reachable from
 inside the app: **Help → User Manual** (`F1`), or the **?** on any tab.
+
+Found a problem? **Report a Bug** in the app's menu bar opens a GitHub issue with
+the version already filled in. If the tool is useful to you, a ⭐ on the
+[project page](https://github.com/yaozhang182/etextile-validation-gui) helps others
+find it — **★ Star on GitHub** in the menu bar takes you there.
 
 ## Choosing training and test data
 

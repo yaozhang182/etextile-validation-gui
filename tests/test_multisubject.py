@@ -476,6 +476,74 @@ def test_tab3_angle_times_come_from_the_timestamps_not_a_nominal_fps():
     assert abs((got[-1] - got[-2]) - 1 / 25.0) < 1e-6, got[-1] - got[-2]
 
 
+def test_both_models_report_sensor_importance():
+    """
+    SimpleCNN1D used to have no importance method: the Results tab drew an empty
+    chart, and Export Report raised inside a Qt slot, which aborts the app.
+    """
+    import tempfile
+    from core.model import HybridCNNLSTM, SimpleCNN1D
+    from core.evaluator import generate_report
+
+    for cls in (HybridCNNLSTM, SimpleCNN1D):
+        model = cls(num_sensors=6, seq_len=20, num_targets=2)
+        imp = model.get_feature_importance()
+        assert imp.shape == (6,), (cls.__name__, imp.shape)
+        assert abs(float(imp.sum()) - 1.0) < 1e-5, cls.__name__
+        assert (imp >= 0).all(), cls.__name__
+
+        # the dashboard draws one bar per sensor, not the "No model" placeholder
+        from core.evaluator import calculate_metrics
+        w = MainWindow()
+        gt = np.random.rand(30, 2) * 90
+        pred = gt + np.random.randn(30, 2) * 5
+        w.state['metrics'] = calculate_metrics(gt, pred, ['J0', 'J1'])
+        w.state['predictions'] = pred
+        w.state['ground_truth'] = gt
+        w.state['model'] = model
+        w.state['selected_sensors'] = [f'S{i}' for i in range(1, 7)]
+        w.tab_results.refresh()
+        assert len(w.tab_results.ax_importance.patches) == 6, cls.__name__
+
+        # and the text report, which used to crash for SimpleCNN1D
+        with tempfile.TemporaryDirectory() as d:
+            generate_report(w.state['metrics'], d, model=model,
+                            sensor_names=w.state['selected_sensors'])
+
+
+def test_bug_report_and_star_links():
+    """Both actions sit on the menu bar and open the right GitHub pages."""
+    from urllib.parse import urlparse, parse_qs
+    from PyQt6.QtGui import QDesktopServices
+    from gui import main_window as mw
+    from gui import icons
+    from app import __version__
+
+    assert not icons.icon('bug').isNull() and not icons.icon('star').isNull()
+
+    opened = []
+    original = QDesktopServices.openUrl
+    QDesktopServices.openUrl = staticmethod(lambda url: opened.append(url.toString()) or True)
+    try:
+        w = MainWindow()
+        w.tabs.setCurrentIndex(2)
+        bar = {a.text(): a for a in w.menuBar().actions()}
+        assert 'Report a Bug' in bar, list(bar)
+        assert '\u2605 Star on GitHub' in bar, list(bar)
+
+        bar['Report a Bug'].trigger()
+        bar['\u2605 Star on GitHub'].trigger()
+    finally:
+        QDesktopServices.openUrl = original
+
+    bug, star = opened
+    u = urlparse(bug)
+    assert u.path.endswith('/etextile-validation-gui/issues/new'), bug
+    body = parse_qs(u.query)['body'][0]
+    assert __version__ in body and 'Angles' in body, body
+    assert star == mw.REPO_URL, star
+
+
 def test_dashboard_refresh_does_not_accumulate_axes():
     """
     Revisiting the Results tab must not stack figures up.

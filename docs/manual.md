@@ -618,6 +618,11 @@ several minutes. It runs once per recording and is then cached.
 **Windows warns about an unrecognised app**
 The executable is not code-signed. Choose *More info → Run anyway*.
 
+**Something else went wrong**
+Choose **Report a Bug** in the menu bar (also under **Help**). It opens a new
+issue on GitHub with the app version, your operating system and the current tab
+already filled in; add what you did and what happened.
+
 ## Glossary
 
 | Term | Meaning |

@@ -17,10 +17,12 @@ from gui.panels.results_dashboard import ResultsDashboardPanel
 from gui.state import ready_subjects
 from gui import design, icons
 
+#: The project on GitHub: manual, issue tracker and star button all live there.
+REPO_URL = "https://github.com/yaozhang182/etextile-validation-gui"
+
 #: Where the manual lives. Each tab deep-links to its own section, so help is
 #: contextual rather than dumping the reader at the top of a long page.
-MANUAL_URL = ("https://github.com/yaozhang182/etextile-validation-gui"
-              "/blob/main/docs/manual.md")
+MANUAL_URL = REPO_URL + "/blob/main/docs/manual.md"
 
 #: Tab index -> (title, manual anchor). The anchors match the headings in
 #: docs/manual.md; keep them in step.
@@ -36,6 +38,30 @@ TABS = [
 def manual_url(anchor=""):
     """Full URL of the manual, optionally at a specific section."""
     return MANUAL_URL + anchor
+
+
+def bug_report_url(context=""):
+    """
+    A new-issue link with the details a maintainer always has to ask for.
+
+    GitHub pre-fills the form from the query string, so the reporter starts
+    with the version and platform already written down and only has to say
+    what went wrong.
+    """
+    import platform
+    from urllib.parse import urlencode
+    from app import __version__
+
+    body = (
+        "**What happened**\n\n\n"
+        "**What you expected**\n\n\n"
+        "**Steps to reproduce**\n1. \n2. \n\n"
+        "---\n"
+        f"- App version: {__version__}\n"
+        f"- OS: {platform.system()} {platform.release()}\n"
+        + (f"- Where: {context}\n" if context else "")
+    )
+    return REPO_URL + "/issues/new?" + urlencode({"body": body})
 
 
 def open_manual(anchor=""):
@@ -168,9 +194,40 @@ class MainWindow(QMainWindow):
 
         help_menu.addSeparator()
 
+        bug = QAction(icons.icon('bug'), "Report a &Bug...", self)
+        bug.setStatusTip("Open a new issue on GitHub, with the version filled in")
+        bug.triggered.connect(self._report_bug)
+        help_menu.addAction(bug)
+
+        star = QAction(icons.icon('star'), "&Star on GitHub...", self)
+        star.setStatusTip("Open the project page on GitHub; the Star button is at the top right")
+        star.triggered.connect(self._open_repo)
+        help_menu.addAction(star)
+
+        help_menu.addSeparator()
+
         about = QAction("&About", self)
         about.triggered.connect(self._show_about)
         help_menu.addAction(about)
+
+        # The same two actions directly on the menu bar, beside Help, so they
+        # are one click away rather than hidden in a menu. Menu-bar actions show
+        # their text, not their icon, hence the star character.
+        for text, source, slot in (("Report a Bug", bug, self._report_bug),
+                                   ("\u2605 Star on GitHub", star, self._open_repo)):
+            action = QAction(text, self)
+            action.setStatusTip(source.statusTip())
+            action.triggered.connect(slot)
+            self.menuBar().addAction(action)
+
+    def _report_bug(self):
+        tab = TABS[self.tabs.currentIndex()][0].replace("&&", "&")
+        QDesktopServices.openUrl(QUrl(bug_report_url(f"tab \u201c{tab.strip()}\u201d")))
+
+    def _open_repo(self):
+        # Starring needs the user's own GitHub login, which the app neither has
+        # nor should ask for; the project page puts the Star button one click away.
+        QDesktopServices.openUrl(QUrl(REPO_URL))
 
     def _show_about(self):
         from app import __version__

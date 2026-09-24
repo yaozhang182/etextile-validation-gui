@@ -11,6 +11,20 @@ import torch
 import torch.nn as nn
 
 
+def first_conv_importance(conv):
+    """
+    Sensor importance from the first convolution layer, which is the only layer
+    that sees each sensor channel separately.
+
+    The L1 norm of the weights attached to each input channel, normalised to sum
+    to one. It shows how much the trained model draws on a channel, not a causal
+    effect -- a guide for which channels to try removing next.
+    """
+    weights = conv.weight.cpu().detach().numpy()        # (out, in=sensors, k)
+    importance = np.sum(np.abs(weights), axis=(0, 2))
+    return importance / np.sum(importance)
+
+
 class HybridCNNLSTM(nn.Module):
     """
     Hybrid CNN-LSTM model for shoulder joint angle prediction.
@@ -72,9 +86,7 @@ class HybridCNNLSTM(nn.Module):
         Sensor importance based on L1-norm of first CNN layer weights.
         Returns normalized importance scores of shape (num_sensors,).
         """
-        weights = self.cnn[0].weight.cpu().detach().numpy()
-        importance = np.sum(np.abs(weights), axis=(0, 2))
-        return importance / np.sum(importance)
+        return first_conv_importance(self.cnn[0])
 
 
 class SimpleCNN1D(nn.Module):
@@ -100,6 +112,10 @@ class SimpleCNN1D(nn.Module):
         x = x.permute(0, 2, 1)
         x = self.cnn(x).squeeze(-1)
         return self.fc(x)
+
+    def get_feature_importance(self):
+        """Same measure as HybridCNNLSTM, so the Results tab can show it for both."""
+        return first_conv_importance(self.cnn[0])
 
 
 def create_model(config, num_sensors):
