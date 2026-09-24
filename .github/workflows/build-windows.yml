@@ -9,6 +9,11 @@ on:
     tags: ['v*']
   workflow_dispatch:        # lets you trigger a build by hand from the Actions tab
 
+# Creating the GitHub Release on a tag needs write access; the default token is
+# read-only on newer repositories.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest

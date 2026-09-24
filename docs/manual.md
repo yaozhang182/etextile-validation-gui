@@ -6,6 +6,9 @@ CSV. No motion-capture lab, no programming.
 The app links here directly: **Help → User Manual** (or `F1`), and
 **Help → Help for This Tab** opens the section for whichever tab you are on.
 
+**Getting the app:** [download the latest Windows build](https://github.com/yaozhang182/etextile-validation-gui/releases/latest/download/ETextileValidation-windows.zip),
+unzip it, and run `ETextileValidation.exe`. Nothing needs installing.
+
 - [What the tool does](#what-the-tool-does)
 - [Input requirements](#input-requirements) · [recording guide](#recording-guide)
 - [Quick walkthrough](#quick-walkthrough)

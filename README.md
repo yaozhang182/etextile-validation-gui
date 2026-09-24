@@ -46,10 +46,17 @@ sessions. The dashboard then reports accuracy per test subject *and* pooled.
 
 ### Option A — packaged Windows app (no Python needed)
 
-**This does not exist yet.** The build is defined in
-`.github/workflows/build-windows.yml` but has never been run — PyInstaller cannot
-cross-compile, so it must run on Windows. See `packaging/README.md` for how to
-produce it. Expect one or two debug rounds on the first build.
+**[⬇ Download the latest Windows build (zip)](https://github.com/yaozhang182/etextile-validation-gui/releases/latest/download/ETextileValidation-windows.zip)**
+· [all releases](https://github.com/yaozhang182/etextile-validation-gui/releases)
+
+1. Unzip it anywhere — the folder is self-contained, nothing is installed.
+2. Run `ETextileValidation.exe` inside the `ETextileValidation` folder.
+3. Windows may warn that the app is unrecognised, because it is not code-signed:
+   choose **More info → Run anyway**.
+
+No Python, conda or terminal is needed. Each release is built and self-tested by
+`.github/workflows/build-windows.yml` on a Windows runner; see
+`packaging/README.md` to build it yourself.
 
 ### Option B — from source
 
