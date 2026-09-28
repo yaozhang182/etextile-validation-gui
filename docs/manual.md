@@ -10,7 +10,8 @@ The app links here directly: **Help → User Manual** (or `F1`), and
 every tab and button on the example data, and is the quickest way to get started.
 
 **Getting the app:** [download the latest Windows build](https://github.com/yaozhang182/etextile-validation-gui/releases/latest/download/ETextileValidation-windows.zip),
-unzip it, and run `ETextileValidation.exe`. Nothing needs installing.
+unzip it, and run `ETextileValidation.exe`. Nothing needs installing. To try it
+straight away, also [download the example data](https://github.com/yaozhang182/etextile-validation-gui/releases/latest/download/ETextileValidation-example-data.zip).
 
 - [What the tool does](#what-the-tool-does)
 - [Input requirements](#input-requirements) · [recording guide](#recording-guide)
@@ -178,8 +179,9 @@ can be used, and the app says which are being ignored.
 
 ## Quick walkthrough
 
-Using the bundled `input_data/examples_data` (four real sessions, one
-participant, 10 channels):
+Using the example data (four real sessions, one participant, 10 channels):
+[download it here](https://github.com/yaozhang182/etextile-validation-gui/releases/latest/download/ETextileValidation-example-data.zip),
+or use `input_data/examples_data` if you cloned the repository.
 
 1. **Tab 1** → **+ Add Subject** under *Training Subjects*, three times, for
    `session_1`, `session_2`, `session_4`. Then once under *Test Subjects* for

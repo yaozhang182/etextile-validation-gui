@@ -3,6 +3,8 @@
 [![GitHub stars](https://img.shields.io/github/stars/yaozhang182/etextile-validation-gui?style=social)](https://github.com/yaozhang182/etextile-validation-gui/stargazers)
 [![Report a bug](https://img.shields.io/badge/report-a%20bug-d73a4a)](https://github.com/yaozhang182/etextile-validation-gui/issues/new)
 [![Tutorial video](https://img.shields.io/badge/tutorial-YouTube-red?logo=youtube)](https://www.youtube.com/watch?v=PFFmzeKfwpI)
+[![Download for Windows](https://img.shields.io/badge/download-Windows%20app-2ea44f?logo=windows)](https://github.com/yaozhang182/etextile-validation-gui/releases/latest/download/ETextileValidation-windows.zip)
+[![Download example data](https://img.shields.io/badge/download-example%20data-2ea44f)](https://github.com/yaozhang182/etextile-validation-gui/releases/latest/download/ETextileValidation-example-data.zip)
 
 [![Watch the 5-minute tutorial on YouTube](docs/img/tutorial_thumbnail.jpg)](https://www.youtube.com/watch?v=PFFmzeKfwpI)
 
@@ -88,8 +90,10 @@ A local machine is much better for interactive use.
 
 ## Trying it on the bundled example
 
-`input_data/examples_data/` holds four real recording sessions (one participant,
-10 garment channels). See its README for details. A reasonable first run:
+**[⬇ Download the example data (zip, 114 MB)](https://github.com/yaozhang182/etextile-validation-gui/releases/latest/download/ETextileValidation-example-data.zip)** and unzip it anywhere.
+It holds four real recording sessions (one participant, 10 garment channels),
+the same files as `input_data/examples_data/` in this repository; see the README
+inside for details. A reasonable first run:
 
 1. Tab 1 → add `session_1`, `session_2`, `session_4` as **training** subjects and
    `session_3` as a **test** subject.

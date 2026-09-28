@@ -93,6 +93,16 @@ jobs:
           7z a -tzip ETextileValidation-windows.zip ETextileValidation/
           ls -lh ETextileValidation-windows.zip
 
+      - name: Package the example data
+        shell: bash
+        run: |
+          # A separate download, so users of the packaged app can try it without
+          # cloning the repository. The README links to the copy on the latest
+          # release, so every release must carry one.
+          cd input_data
+          7z a -tzip ../dist/ETextileValidation-example-data.zip examples_data/
+          ls -lh ../dist/ETextileValidation-example-data.zip
+
       - uses: actions/upload-artifact@v4
         with:
           name: ETextileValidation-windows
@@ -103,4 +113,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/ETextileValidation-windows.zip
+          files: |
+            dist/ETextileValidation-windows.zip
+            dist/ETextileValidation-example-data.zip
