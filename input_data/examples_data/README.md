@@ -65,3 +65,10 @@ uses, so they are omitted to avoid two conflicting sources of ground truth. They
 remain in `example_data.zip` if a comparison is ever wanted —
 `joint_position/motion_N.npy` is `(T, 22, 3)` in the same SMPLH layout that
 `core.joint_angles.extract_all_joint_angles()` accepts.
+
+## Licence
+
+These recordings are released under the Creative Commons Attribution 4.0
+International licence (CC BY 4.0); see `LICENSE` in this folder. You may share and
+adapt them for any purpose, provided you credit this project:
+<https://github.com/yaozhang182/etextile-validation-gui>.

@@ -62,3 +62,6 @@ study/
 
 # Tutorial video build output (shots, audio, rendered mp4)
 docs/video/build/
+
+# Camera-ready paper and confidential reviews
+camera_ready_paper/

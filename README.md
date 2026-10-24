@@ -144,3 +144,19 @@ matplotlib rebuilds its font cache on network home directories.
 | `packaging/` | PyInstaller spec for the Windows build |
 | `external/data_collection/` | reference scripts for recording video + sensor data on one clock |
 | `tests/` | regression tests |
+
+## Licence
+
+The source code is released under the **GNU General Public License v3.0**; see
+[`LICENSE`](LICENSE). GPL-3.0 is required by the GUI toolkit: the application is
+built on PyQt6, which is itself GPL-licensed, and the Windows download bundles it.
+You may use, modify and redistribute the toolchain, provided that modified versions
+you distribute are released under the same licence with their source code.
+
+The example recordings in `input_data/examples_data/` (also offered as the
+example-data download) are released under the **Creative Commons Attribution 4.0
+International** licence; see [`input_data/examples_data/LICENSE`](input_data/examples_data/LICENSE).
+You may reuse them for any purpose, with attribution to this project.
+
+The interface icons are from [Lucide](https://lucide.dev) and remain under their
+own ISC licence ([`gui/icons/LICENSE`](gui/icons/LICENSE)).

@@ -57,6 +57,9 @@ datas += [(os.path.join(project_root, 'gui', 'style.qss'), 'gui')]
 # is exactly why CI checks for them explicitly.
 datas += [(os.path.join(project_root, 'gui', 'icons'), os.path.join('gui', 'icons'))]
 
+# The licence travels with the binaries, as GPL-3.0 expects of a distributed build.
+datas += [(os.path.join(project_root, 'LICENSE'), '.')]
+
 a = Analysis(
     [os.path.join(project_root, 'app.py')],
     pathex=[project_root],
