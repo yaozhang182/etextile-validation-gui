@@ -66,8 +66,11 @@ _MP_SOURCES = {
 # shoulders, so those joints gate all of them.
 _BODY_FRAME = [PELVIS, L_HIP, R_HIP, L_SHOULDER, R_SHOULDER]
 
-# Angles built on the shoulder frame additionally inherit the lumbar chain.
-_SHOULDER_FRAME = _BODY_FRAME + [NECK, R_SHOULDER]
+# The trunk angles use the neck (extension, bending) and the collar line
+# (rotation); the shoulder frame is built from all three, so shoulder and neck
+# angles inherit them.
+_TRUNK = _BODY_FRAME + [NECK, L_COLLAR, R_COLLAR]
+_SHOULDER_FRAME = _TRUNK
 
 #: Which SMPLH joints each angle channel is computed from. Mirrors the maths in
 #: joint_angles.extract_all_joint_angles().
@@ -78,10 +81,12 @@ ANGLE_JOINT_DEPENDENCIES = {
 
     'left_hip_flexion':         _BODY_FRAME + [L_HIP, L_KNEE, L_ANKLE],
     'left_hip_abduction':       _BODY_FRAME + [L_HIP, L_KNEE, L_ANKLE],
-    'left_hip_rotation':        _BODY_FRAME + [L_HIP, L_KNEE, L_ANKLE],
+    # Hip rotation uses the knee hinge axis, and the ankle hinge axis (foot)
+    # when the knee is nearly straight.
+    'left_hip_rotation':        _BODY_FRAME + [L_HIP, L_KNEE, L_ANKLE, L_FOOT],
     'right_hip_flexion':        _BODY_FRAME + [R_HIP, R_KNEE, R_ANKLE],
     'right_hip_abduction':      _BODY_FRAME + [R_HIP, R_KNEE, R_ANKLE],
-    'right_hip_rotation':       _BODY_FRAME + [R_HIP, R_KNEE, R_ANKLE],
+    'right_hip_rotation':       _BODY_FRAME + [R_HIP, R_KNEE, R_ANKLE, R_FOOT],
 
     # Pure three-point angles — no body frame involved.
     'left_knee_flexion':        [L_HIP, L_KNEE, L_ANKLE],
@@ -89,9 +94,9 @@ ANGLE_JOINT_DEPENDENCIES = {
     'left_ankle_flexion':       [L_KNEE, L_ANKLE, L_FOOT],
     'right_ankle_flexion':      [R_KNEE, R_ANKLE, R_FOOT],
 
-    'lumbar_extension':         _BODY_FRAME + [NECK, R_SHOULDER],
-    'lumbar_bending':           _BODY_FRAME + [NECK, R_SHOULDER],
-    'lumbar_rotation':          _BODY_FRAME + [NECK, R_SHOULDER],
+    'lumbar_extension':         _TRUNK,
+    'lumbar_bending':           _TRUNK,
+    'lumbar_rotation':          _TRUNK,
 
     'left_shoulder_flexion':    _SHOULDER_FRAME + [L_SHOULDER, L_ELBOW, L_WRIST],
     'left_shoulder_abduction':  _SHOULDER_FRAME + [L_SHOULDER, L_ELBOW, L_WRIST],

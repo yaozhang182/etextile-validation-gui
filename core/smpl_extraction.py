@@ -44,10 +44,15 @@ def mediapipe_to_smplh22(mp_landmarks):
 
     Args:
         mp_landmarks: (T, 33, 3) or (33, 3)
-            MediaPipe world coords: X=right, Y=down, Z=towards_camera
+            MediaPipe world coords: X = image right, Y = down, Z = away from
+            the camera (smaller z is closer)
 
     Returns:
-        (T, 22, 3) or (22, 3) in SMPLH convention (X=right, Y=up, Z=forward)
+        (T, 22, 3) or (22, 3) with X = the person's left, Y = up, Z = the
+        person's forward (for a person facing the camera: image right, up,
+        toward the camera). This is the SMD "humanml3d" convention that
+        core.joint_angles expects; on the example data its chirality score
+        is +1.0, i.e. not mirrored.
     """
     single_frame = mp_landmarks.ndim == 2
     if single_frame:
@@ -94,7 +99,8 @@ def mediapipe_to_smplh22(mp_landmarks):
     smplh[:, 6] = pelvis + spine_vec * 0.50   # spine2
     smplh[:, 9] = pelvis + spine_vec * 0.75   # spine3
 
-    # Coordinate transform: MediaPipe (Y-down, Z-backward) -> SMPLH (Y-up, Z-forward)
+    # MediaPipe (X image-right, Y down, Z away from camera) -> (X left, Y up, Z forward):
+    # a 180 deg rotation about X, so handedness is kept.
     smplh[:, :, 1] *= -1
     smplh[:, :, 2] *= -1
 

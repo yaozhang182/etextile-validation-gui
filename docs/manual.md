@@ -14,7 +14,7 @@ unzip it, and run `ETextileValidation.exe`. Nothing needs installing. To try it
 straight away, also [download the example data](https://github.com/yaozhang182/etextile-validation-gui/releases/latest/download/ETextileValidation-example-data.zip).
 
 - [What the tool does](#what-the-tool-does)
-- [Input requirements](#input-requirements) · [recording guide](#recording-guide)
+- [Input requirements](#input-requirements) · [recording guide](#recording-guide) · [clock synchronisation](#synchronise-the-clocks-before-recording)
 - [Quick walkthrough](#quick-walkthrough)
 - [Tab 1 — Data Import](#tab-1--data-import) · [train/test split](#choosing-the-traintest-split)
 - [Tab 2 — Skeleton Viewer](#tab-2--skeleton-viewer)
@@ -83,6 +83,35 @@ would have no way to line up. The tool checks for this and refuses the files.
 Only the **overlap** of the two streams is usable. If the sensor logger ran for
 100 s but the video covers 15 s of that, you get 15 s of training data.
 
+### Synchronise the clocks before recording
+
+The tool trusts the timestamps. If the video and the sensor are recorded on
+**two computers**, any difference between their clocks shifts every sensor
+reading against the video by that amount, and nothing in the files can reveal
+it. Computer clocks drift by up to a few seconds a day, so synchronise **both**
+computers against the same time server on the day of the recording, shortly
+before you start.
+
+Use **`time.google.com`** on both. Do not mix it with another service (such as
+`time.windows.com` or `pool.ntp.org`): Google spreads leap seconds over a whole
+day and most other servers do not, so the two can disagree around a leap second.
+
+| System | Synchronise now | Check |
+|---|---|---|
+| Windows (Command Prompt as administrator) | `net start w32time`, then `w32tm /config /manualpeerlist:time.google.com /syncfromflags:manual /update`, then `w32tm /resync` | `w32tm /stripchart /computer:time.google.com /samples:3 /dataonly` |
+| macOS (Terminal) | `sudo sntp -sS time.google.com` | `sntp time.google.com` |
+| Linux, systemd-timesyncd | set `NTP=time.google.com` in `/etc/systemd/timesyncd.conf`, then `sudo systemctl restart systemd-timesyncd` | `timedatectl timesync-status` |
+| Linux, chrony | add `server time.google.com iburst` to `/etc/chrony.conf` (or `/etc/chrony/chrony.conf`), restart chronyd, then `sudo chronyc makestep` | `chronyc tracking` |
+
+The offset should be a few milliseconds. `python external/data_collection/clock_check.py`
+measures it on any system without changing anything, and the recording scripts
+below run the same check when they start: they print the offset, warn when it
+is above 100 ms, and append it to `clock_check.log` so you can look it up later.
+
+**On a single computer** the video and the sensor logger read the same system
+clock, so they are aligned whatever the clock says. Synchronising is harmless
+there, but not required.
+
 ### Recording guide
 
 #### Camera
@@ -123,6 +152,7 @@ Only the **overlap** of the two streams is usable. If the sensor logger ran for
 | Mistake | Consequence |
 |---|---|
 | Sensor logger and video started from separate clocks | files are rejected — no overlap |
+| Two computers, clocks not synchronised | sensor data shifted against the video; nothing warns you |
 | Sensor logger left running much longer than the video | only the overlap is usable; most data wasted |
 | Person partly out of frame | limbs go red in the Skeleton Viewer; those channels unusable |
 | Facing sideways | the tracked joints are self-occluded |
@@ -139,13 +169,15 @@ with, and the simplest way to see what "a shared clock" means in practice.
 |---|---|
 | `video/record_video_train 1.py` | captures from a webcam, writes `train.mp4` **and** the matching `train_video.csv` (`FrameIndex;EpochTime;Marker`), and burns the epoch time into each frame |
 | `video/record_video_test 1.py` | the same, for the held-out recording |
+| `clock_check.py` | measures this computer's clock offset to `time.google.com`; the recording scripts call it at start-up |
 | `IMU/protoype_codes/save_serial.py` | reads the garment over a serial port and writes `EpochTime;S1;S2;…` |
 | `IMU/protoype_codes/flex_master/`, `flex_slave/` | Arduino sketches for the sensing hardware |
 | `IMU/protoype_codes/read_angle.py` | reads angles directly from an IMU, for comparison |
 
-**Why they matter:** both sides call `time.time()`, so the video timestamps and
-the sensor rows land on the same absolute clock without any manual
-synchronisation. That is the requirement the tool cannot work without, and the
+**Why they matter:** both sides call `time.time()`, so on one computer the video
+timestamps and the sensor rows land on the same absolute clock without any manual
+synchronisation. On two computers, synchronise the clocks first
+([see above](#synchronise-the-clocks-before-recording)). That is the requirement the tool cannot work without, and the
 one most often got wrong. Adapt these rather than starting from scratch.
 
 Two details worth copying:
@@ -157,7 +189,9 @@ Two details worth copying:
   verify the alignment by eye later, which is how the bundled example was checked.
 
 Both are started by hand, so start the sensor logger first and stop it last; only
-the overlap is used.
+the overlap is used. The sensor script stamps each reading when it arrives at the
+computer, so with two computers it is that computer's clock that has to be
+synchronised, not the microcontroller's.
 
 ### Things that are handled for you
 
@@ -258,8 +292,12 @@ short recording, little overlap — let you continue but say what to expect.
 ### Caching
 
 After extraction, joint angles are saved next to each video as
-`<video>.angles.npz`. Re-adding that session later is instant. Delete the `.npz`
-to force a fresh extraction.
+`<video>.angles.npz`, together with the 3D skeleton. Re-adding that session later
+is instant. Delete the `.npz` to force a fresh extraction.
+
+A cache written by a version that computed the angles differently is not reused
+as it is: the angles are recomputed from the cached skeleton (this takes under a
+second, and the log says so) and the cache is rewritten.
 
 ### Choosing the train/test split
 
@@ -360,74 +398,105 @@ that window can be used for training.
 
 ### Joint angle definitions
 
-The 26 channels below are computed from the reconstructed skeleton following ISB
-conventions — Wu et al., *J. Biomech.* 35(4) 2002 (ankle, hip, spine) and 38(5)
-2005 (shoulder, elbow, wrist). **What matters in practice is the sign
-convention**, because that is what determines whether your sensor correlates
-positively or negatively with the channel you picked.
+The 26 channels are the joint angles of the Structured Motion Description (SMD,
+version 4), computed from the reconstructed 22-joint skeleton. The code is
+`core/smd_angle_calculator.py`, an unmodified copy of the SMD reference
+implementation; `core/joint_angles.py` maps its angles onto the channel names
+below. **What matters in practice is the sign convention**, because that is
+what determines whether your sensor correlates positively or negatively with the
+channel you picked.
 
-#### Two kinds of channel
+All angles are in degrees. Left and right always mean the participant's own left
+and right, and both sides use the same sign convention.
 
-**Signed channels** are measured against a body-fixed reference frame, so they
-run through zero and can be negative. Twelve of them are rotational and are
-unwrapped frame to frame, so ±180° discontinuities do not appear as jumps.
+#### Three kinds of channel
 
-**Unsigned channels** — the knee, ankle and elbow — are the angle *between two
-body segments*, computed as `arccos` of the dot product. They therefore run
-0–180° and **cannot be negative**. Zero means the two segments are in line:
+**Segment angles** — knee, elbow and ankle — are the angle between two body
+segments, so they cannot tell flexion from hyperextension:
 
 - `knee_flexion = 0` → leg straight; `≈ 90` → seated
 - `elbow_flexion = 0` → arm straight; `≈ 90` → forearm at right angles
-- `ankle_flexion` → angle between shank and foot
+- `ankle_flexion` → 0 when the foot is at right angles to the shank; negative
+  when the foot points down. Because the foot point is at the toes, a relaxed
+  foot already reads about −10 to −20.
 
-This is worth knowing before you look for a correlation: an unsigned channel
-cannot distinguish flexion from hyperextension, and a sensor that does will look
-worse than it is.
+**Limb and trunk directions** — every flexion, abduction, extension and bending
+channel — give the direction of a segment in the frame of the segment above it.
+Shoulder and hip flexion run from −90 to 270, so an arm raised overhead reads
+about 175 and never jumps to −185. When the arm or leg points straight out to
+the side, flexion has no defined value; those frames are filled in by
+interpolation from the frames around them.
+
+**Twists** — pelvis rotation, lumbar rotation, shoulder and hip rotation — are
+continuous: they are unwrapped, so a turn past ±180 does not show as a jump.
+Shoulder rotation is the twist of the forearm about the upper arm, and it only
+exists while the elbow is bent: with the elbow nearly straight (under 20°) or
+the arm pointing straight up, it is interpolated. When that applies to more than
+a fifth of a recording, the Data Import log says so; do not use that channel as
+a target for that recording.
 
 #### The channels
 
 Observed ranges are from `session_1` of the bundled example (one seated
-participant, arm movements) — they show what the numbers actually look like, not
+participant, arm movements). They show what the numbers actually look like, not
 the anatomical limits.
 
-| Channel | Joint | Signed? | Zero means | Observed in example |
-|---|---|:--:|---|---|
-| `pelvis_flexion` | pelvis | yes | pelvis upright | −6 … +6 |
-| `pelvis_adduction` | pelvis | yes | pelvis level side-to-side | −10 … +3 |
-| `pelvis_rotation` | pelvis | yes | pelvis square to forward | +6 … +18 |
-| `lumbar_extension` | trunk | yes | trunk upright | **always 0 — see below** |
-| `lumbar_bending` | trunk | yes | trunk not leaning sideways | −8 … +7 |
-| `lumbar_rotation` | trunk | yes | shoulders square over pelvis | −25 … −9 |
-| `left_hip_flexion` / `right_hip_flexion` | hip | yes | thigh in line with trunk | 73 … 103 (seated) |
-| `left_hip_abduction` / `right_hip_abduction` | hip | yes | thigh in the sagittal plane | −4 … +25 |
-| `left_hip_rotation` / `right_hip_rotation` | hip | yes | shank straight below thigh | −16 … +12 |
-| `left_knee_flexion` / `right_knee_flexion` | knee | **no** | leg straight | 81 … 102 (seated) |
-| `left_ankle_flexion` / `right_ankle_flexion` | ankle | **no** | foot in line with shank | 29 … 70 |
-| `left_shoulder_flexion` / `right_shoulder_flexion` | shoulder | yes | arm hanging down | −23 … +142 |
-| `left_shoulder_abduction` / `right_shoulder_abduction` | shoulder | yes | arm in the sagittal plane | −39 … −2 |
-| `left_shoulder_rotation` / `right_shoulder_rotation` | shoulder | yes | forearm in the plane of the upper arm | −35 … +45 |
-| `left_elbow_flexion` / `right_elbow_flexion` | elbow | **no** | arm straight | 2 … 67 |
-| `neck_flexion` | neck | yes | head upright | 57 … 77 |
-| `neck_bending` | neck | yes | head not tilted sideways | −30 … +5 |
+| Channel | Larger value means | Observed in example |
+|---|---|---|
+| `pelvis_flexion` | whole body pitched backward (smaller = bowing forward) | −7 … +5 |
+| `pelvis_adduction` | body leaning to its right | −11 … +3 |
+| `pelvis_rotation` | body turned to its left (heading) | +6 … +18 |
+| `lumbar_extension` | trunk leaning back relative to the pelvis | **always 0, see below** |
+| `lumbar_bending` | trunk bending to its right | −8 … +7 |
+| `lumbar_rotation` | shoulders twisted to the left relative to the pelvis | −27 … −9 |
+| `left_hip_flexion` / `right_hip_flexion` | thigh forward and up (0 = hanging down) | 73 … 103 (seated) |
+| `left_hip_abduction` / `right_hip_abduction` | thigh **toward** the midline (smaller = leg out to the side) | −25 … +13 |
+| `left_hip_rotation` / `right_hip_rotation` | internal rotation (knee and toes turn inward) | −26 … +23 |
+| `left_knee_flexion` / `right_knee_flexion` | knee more bent (0 = straight) | 81 … 101 (seated) |
+| `left_ankle_flexion` / `right_ankle_flexion` | toes pulled up (smaller = foot pointed) | −61 … −20 |
+| `left_shoulder_flexion` / `right_shoulder_flexion` | arm raised forward and up (0 = hanging, 90 = forward at shoulder height, ~175 = overhead) | −22 … +141 |
+| `left_shoulder_abduction` / `right_shoulder_abduction` | arm **toward** the body (smaller = arm out to the side; about −80 is horizontal) | −39 … −2 |
+| `left_shoulder_rotation` / `right_shoulder_rotation` | internal rotation (forearm toward the belly; 0 = forearm pointing forward with the arm hanging) | see above |
+| `left_elbow_flexion` / `right_elbow_flexion` | elbow more bent (0 = straight) | 2 … 67 |
+| `neck_flexion` | head bending down; about 40 is looking straight ahead | 57 … 77 |
+| `neck_bending` | head tilting toward the right shoulder | −30 … +5 |
 
-The twelve unwrapped rotational channels are the three pelvis channels, both hip
-rotations, both shoulder flexions, both shoulder rotations, lumbar rotation, and
-both neck channels.
+The two **abduction** channels keep their names from earlier versions of the
+tool, but a larger value means the limb is closer to the midline (adduction) on
+both sides. Raising the arm sideways makes the value more negative.
 
-#### `lumbar_extension` does not work — do not use it
+#### What the webcam skeleton cannot measure
 
-The pose tracker provides no pelvis landmark, so the pelvis is reconstructed from
-the hip midpoint. That reconstruction leaves the trunk vector and the body
-reference frame collinear, and lumbar extension comes out as **exactly 0° in
-every frame** — confirmed in the example data above.
+The pose tracker has no pelvis, spine or collarbone landmarks. The tool
+reconstructs them from the hips and shoulders, and three channels pay for it:
 
-It is listed for completeness only. Picking it as a target will train a model
-against a constant. `lumbar_bending` and `lumbar_rotation` are unaffected and
-usable.
+- **`lumbar_extension` is always 0.** The pelvis is placed on the line from the
+  hip midpoint to the neck, which leaves the trunk and the pelvis frame
+  collinear. Forward and backward lean of the trunk therefore shows up in
+  `pelvis_flexion` instead. Picking `lumbar_extension` as a target would train a
+  model against a constant.
+- **`lumbar_rotation`** is measured from the line between the reconstructed
+  collarbones, which runs parallel to the shoulder line. Shrugging or pushing
+  one shoulder forward moves it a few degrees even when the trunk does not
+  twist.
+- **Neck rotation** (turning the head left or right) is not a channel at all:
+  two head points are not enough to measure it.
 
-More generally, every channel that depends on the synthesised pelvis or spine is
-flagged in the **Tracking Quality** view, because those carry a geometric
-assumption on top of whatever the tracking confidence says.
+Every channel that depends on the reconstructed joints is flagged in the
+**Tracking Quality** view, because those carry a geometric assumption on top of
+whatever the tracking confidence says.
+
+#### Changes in version 0.2.4
+
+Version 0.2.4 replaced the angle computation with the SMD v4 definitions. The
+older definitions unwrapped shoulder flexion over the whole recording, so a
+single badly tracked frame could shift every later value by 360°; swapped
+forward and sideways pelvis tilt once the participant turned; measured lumbar
+rotation from the right shoulder only; under-read shoulder and hip rotation
+whenever the elbow or knee was straight; and used opposite signs on the two
+sides for hip abduction and for hip and shoulder rotation. Angles cached by an
+older version are recomputed automatically from the cached skeleton the next
+time the session is added, so models trained before 0.2.4 should be retrained.
 
 ---
 

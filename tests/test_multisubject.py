@@ -34,6 +34,7 @@ from core.data_alignment import (  # noqa: E402
     estimate_fps_from_frames,
 )
 from gui.main_window import MainWindow  # noqa: E402
+from core.joint_angles import ANGLE_CHANNELS, ANGLE_DEFINITION_VERSION  # noqa: E402
 from gui.panels.data_import import (  # noqa: E402
     AddSubjectDialog, angle_cache_path, read_csv_auto,
 )
@@ -212,7 +213,8 @@ def test_angle_cache_roundtrip_and_corruption():
     open(video, 'wb').close()
 
     angles = {'a1': np.arange(300, dtype=float), 'a2': np.arange(300, dtype=float) * 2}
-    np.savez_compressed(angle_cache_path(video), __meta__=np.array([VIDEO_FPS]), **angles)
+    np.savez_compressed(angle_cache_path(video), __meta__=np.array([VIDEO_FPS]),
+                        __angle_version__=np.array([ANGLE_DEFINITION_VERSION]), **angles)
 
     s = make_subject('S1', video, '/tmp/s.csv', '/tmp/t.csv')
     w.tab_import._load_cached_angles(s)
@@ -278,7 +280,7 @@ def test_fps_estimation_degrades_safely():
     assert estimate_fps_from_frames(absurd, fallback=25.0) == 25.0
 
 
-def _write_cache(with_joints, n=200):
+def _write_cache(with_joints, n=200, version=True):
     """Build a subject whose angles come from a cache file, as after re-opening."""
     from gui.panels.data_import import angle_cache_path
     d = tempfile.mkdtemp()
@@ -289,6 +291,8 @@ def _write_cache(with_joints, n=200):
     extra = {'__visibility__': np.ones((n, 33), dtype=np.float32)}
     if with_joints:
         extra['__smplh__'] = np.random.rand(n, 22, 3).astype(np.float32)
+    if version:
+        extra['__angle_version__'] = np.array([ANGLE_DEFINITION_VERSION])
     np.savez_compressed(angle_cache_path(video), __meta__=np.array([30.0]),
                         **extra, **angles)
     return video
@@ -331,6 +335,36 @@ def test_cache_round_trips_the_3d_joints():
     w.tab_skeleton.refresh()
     w.tab_skeleton.frame_slider.setValue(10)
     w.tab_skeleton._update_plot()
+
+
+def test_outdated_cache_is_recomputed_from_its_joints():
+    """
+    A cache written with older angle definitions must not be trusted. If it
+    carries the 3D joints, the angles are recomputed from them and the cache is
+    rewritten with the current version.
+    """
+    from gui.panels.data_import import angle_cache_path
+    w = MainWindow()
+    video = _write_cache(with_joints=True, n=120, version=False)
+    subject = make_subject('S1', video, '/tmp/s.csv', '/tmp/f.csv')
+    w.tab_import._load_cached_angles(subject)
+
+    assert subject['status'] == 'ready'
+    assert set(subject['angles']) == set(ANGLE_CHANNELS), "angles must be recomputed"
+    assert subject['angles']['right_shoulder_flexion'].shape == (120,)
+    with np.load(angle_cache_path(video)) as data:
+        assert str(data['__angle_version__'][0]) == ANGLE_DEFINITION_VERSION
+        assert set(ANGLE_CHANNELS) <= set(data.files)
+
+
+def test_outdated_cache_without_joints_is_ignored():
+    """Old angles with nothing to recompute them from: extract the video again."""
+    w = MainWindow()
+    subject = make_subject('S1', _write_cache(with_joints=False, version=False),
+                           '/tmp/s.csv', '/tmp/f.csv')
+    w.tab_import._load_cached_angles(subject)
+    assert subject['status'] == 'pending'
+    assert not subject.get('angles')
 
 
 def test_extraction_result_supplies_everything_the_cache_needs():

@@ -40,6 +40,10 @@ sensor.csv     EpochTime ; S1 … Sn
 frames.csv     FrameIndex ; EpochTime   (one row per video frame)
 ```
 
+If the video and the sensor are recorded on two computers, synchronise both
+clocks against `time.google.com` before recording; see
+[the manual](docs/manual.md#synchronise-the-clocks-before-recording).
+
 **+ Add Subject** under *Training Subjects* adds to the training set; the same
 button under *Test Subjects* adds to the held-out test set. Add as many as you
 like to either. The dialog will not let you confirm until all three files are

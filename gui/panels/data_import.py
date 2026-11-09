@@ -74,17 +74,56 @@ def cache_description(video_path):
     What a existing cache can restore, so the user knows what to expect.
 
     Caches written before 3D joints were stored still give angles, training and
-    results — only the Skeleton Viewer needs a re-extraction.
+    results — only the Skeleton Viewer needs a re-extraction. Caches computed
+    with older angle definitions are recomputed from their 3D joints.
     """
+    from core.joint_angles import ANGLE_DEFINITION_VERSION
     try:
         with np.load(angle_cache_path(video_path), allow_pickle=True) as data:
+            current = _cache_version(data) == ANGLE_DEFINITION_VERSION
             if '__smplh__' in data.files:
-                return "Cached angles and 3D skeleton found — extraction will be skipped."
+                if current:
+                    return "Cached angles and 3D skeleton found — extraction will be skipped."
+                return ("Cached 3D skeleton found — the joint angles will be "
+                        "recomputed with the current definitions; extraction "
+                        "will be skipped.")
+            if not current:
+                return ("The cached angles use older definitions and the cache "
+                        "has no 3D skeleton; the video will be re-extracted.")
             return ("Cached angles found (no 3D skeleton in this older cache). "
                     "Everything works except the Skeleton Viewer; re-extract to "
                     "restore it.")
     except Exception:
         return "A cache file exists but could not be read; it will be re-extracted."
+
+
+#: Keys of an angle cache that are not angle channels.
+CACHE_RESERVED_KEYS = {'__meta__', '__visibility__', '__smplh__', '__angle_version__'}
+
+
+def _cache_version(data):
+    """Angle-definition version a cache was written with (None = before versions)."""
+    if '__angle_version__' not in data.files:
+        return None
+    return str(np.asarray(data['__angle_version__']).reshape(-1)[0])
+
+
+def write_angle_cache(video_path, fps, angles, smplh_joints=None, visibility=None):
+    """Write the per-video cache: angles, frame rate, 3D joints and visibility."""
+    from core.joint_angles import ANGLE_DEFINITION_VERSION
+    extra = {}
+    if visibility is not None:
+        extra['__visibility__'] = visibility
+    # Cache the 3D joints as well, otherwise the Skeleton Viewer has nothing to
+    # draw when a subject is restored from cache, and angles could not be
+    # recomputed when their definitions change. (T, 22, 3) float32 is ~0.8 MB
+    # for a two-minute recording — cheap next to re-running MediaPipe.
+    if smplh_joints is not None:
+        extra['__smplh__'] = np.asarray(smplh_joints, dtype=np.float32)
+    np.savez_compressed(
+        angle_cache_path(video_path), __meta__=np.array([fps]),
+        __angle_version__=np.array([ANGLE_DEFINITION_VERSION]), **extra, **angles,
+    )
 
 
 class _Cancelled(Exception):
@@ -374,6 +413,8 @@ class DataImportPanel(QWidget):
         self._load_cached_angles(subject)
         self._refresh_table(split)
         self._describe(split, subject)
+        for line in subject.pop('cache_note', None) or []:
+            self.preview.append(f"  ! {line}" if 'undefined' in line else f"  {line}")
         for f in findings:
             if f.level == WARNING:
                 self.preview.append(f"  ! {f.title}: {f.detail}")
@@ -392,35 +433,64 @@ class DataImportPanel(QWidget):
         self._refresh_table(split)
 
     def _load_cached_angles(self, subject):
-        """Reuse previously computed angles so extraction can be skipped."""
+        """
+        Reuse previously computed angles so extraction can be skipped.
+
+        A cache written with older angle definitions is recomputed from its 3D
+        joints (a fraction of a second) and rewritten. If it has no joints, it
+        is ignored and the video is extracted again.
+        """
+        from core.joint_angles import (ANGLE_DEFINITION_VERSION, extract_all_joint_angles,
+                                       interpolation_warnings)
         cache = angle_cache_path(subject['video_path'])
         if not cache.exists():
             return
-        reserved = {'__meta__', '__visibility__', '__smplh__'}
         try:
             with np.load(cache, allow_pickle=True) as data:
-                angles = {k: data[k] for k in data.files if k not in reserved}
-                if not angles:
-                    return
-                subject['angles'] = angles
-                n = len(next(iter(angles.values())))
                 fps = float(data['__meta__'][0]) if '__meta__' in data.files else 30.0
-                subject['time'] = np.arange(n) / (fps or 30.0)
-
-                # Rebuild the skeleton record. Caches written before 3D joints
-                # were stored contain no '__smplh__'; the Skeleton Viewer detects
-                # the missing key and says so rather than failing.
-                skeleton = {'fps': fps, 'total_frames': n, 'valid_frames': n}
-                if '__visibility__' in data.files:
-                    skeleton['visibility'] = data['__visibility__']
-                if '__smplh__' in data.files:
-                    joints = data['__smplh__']
-                    skeleton['smplh_joints'] = joints
-                    skeleton['total_frames'] = int(len(joints))
-                subject['skeleton'] = skeleton
-                subject['status'] = 'ready'
+                fps = fps or 30.0
+                joints = data['__smplh__'] if '__smplh__' in data.files else None
+                visibility = data['__visibility__'] if '__visibility__' in data.files else None
+                current = _cache_version(data) == ANGLE_DEFINITION_VERSION
+                angles = ({k: data[k] for k in data.files if k not in CACHE_RESERVED_KEYS}
+                          if current else None)
         except Exception:
-            pass  # Corrupt cache is not fatal — just re-extract.
+            return  # Corrupt cache is not fatal — just re-extract.
+
+        if not current:
+            if joints is None:
+                return  # Outdated angles and nothing to recompute them from.
+            try:
+                info = {}
+                angles, _ = extract_all_joint_angles(joints, fps=fps, info=info)
+            except Exception:
+                return
+            try:
+                write_angle_cache(subject['video_path'], fps, angles, joints, visibility)
+            except Exception:
+                pass  # e.g. a read-only folder: use the angles, recompute next time
+            subject['cache_note'] = (
+                ["joint angles recomputed from the cached 3D skeleton "
+                 "(angle definitions changed)"]
+                + interpolation_warnings(info, len(joints)))
+        if not angles:
+            return
+
+        subject['angles'] = angles
+        n = len(next(iter(angles.values())))
+        subject['time'] = np.arange(n) / fps
+
+        # Rebuild the skeleton record. Caches written before 3D joints were
+        # stored contain no '__smplh__'; the Skeleton Viewer detects the missing
+        # key and says so rather than failing.
+        skeleton = {'fps': fps, 'total_frames': n, 'valid_frames': n}
+        if visibility is not None:
+            skeleton['visibility'] = visibility
+        if joints is not None:
+            skeleton['smplh_joints'] = joints
+            skeleton['total_frames'] = int(len(joints))
+        subject['skeleton'] = skeleton
+        subject['status'] = 'ready'
 
     def _describe(self, split, subject):
         """Log a short summary of the newly added files."""
@@ -603,9 +673,10 @@ class DataImportPanel(QWidget):
         result['container_fps'] = container_fps
 
         subject['skeleton'] = result
+        info = {}
         try:
             angles, time = extract_all_joint_angles(
-                result['smplh_joints'], fps=fps
+                result['smplh_joints'], fps=fps, info=info
             )
         except Exception as e:
             self._on_extraction_error(f"joint angle computation failed: {e}", split, subject)
@@ -617,20 +688,8 @@ class DataImportPanel(QWidget):
         subject['error'] = None
 
         try:
-            extra = {}
-            if result.get('visibility') is not None:
-                extra['__visibility__'] = result['visibility']
-            # Cache the 3D joints as well, otherwise the Skeleton Viewer has
-            # nothing to draw when a subject is restored from cache. (T, 22, 3)
-            # float32 is ~0.8 MB for a two-minute recording — cheap next to
-            # re-running MediaPipe over every frame.
-            if result.get('smplh_joints') is not None:
-                extra['__smplh__'] = np.asarray(result['smplh_joints'],
-                                                dtype=np.float32)
-            np.savez_compressed(
-                angle_cache_path(subject['video_path']),
-                __meta__=np.array([result['fps']]), **extra, **angles,
-            )
+            write_angle_cache(subject['video_path'], result['fps'], angles,
+                              result.get('smplh_joints'), result.get('visibility'))
         except Exception:
             pass  # Caching is best-effort.
 
@@ -646,6 +705,9 @@ class DataImportPanel(QWidget):
         except Exception:
             pass
         self.preview.append(summary)
+        from core.joint_angles import interpolation_warnings
+        for line in interpolation_warnings(info, len(result['smplh_joints'])):
+            self.preview.append(f"  ! {line}")
         self._refresh_table(split)
         self._run_next_extraction()
 
