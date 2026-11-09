@@ -18,7 +18,9 @@ computed before:
 
 - shoulder and hip flexion are kept in [-90, 270) and frames where flexion is
   undefined (limb out to the side) are interpolated, instead of unwrapping the
-  whole series, where one bad frame offset everything after it by 360 degrees;
+  whole series, where one bad frame offset everything after it by 360 degrees.
+  No channel is unwrapped at all, so every value stays in the fixed range of
+  ANGLE_RANGES;
 - pelvis tilt / list no longer swap when the person turns (heading-first Euler);
 - lumbar rotation uses the collar line instead of the right shoulder alone;
 - shoulder and hip rotation are twists about the limb axis, + = internal on
@@ -38,7 +40,7 @@ SMD_ANGLE_SOURCE_MD5 = '302070cf2d0c01b729ad32b0a3049cc4'
 
 #: Stored in every angle cache. A cache with another (or no) version was
 #: computed with older definitions and is recomputed from its cached joints.
-ANGLE_DEFINITION_VERSION = 'smd-v4-2026-10-10'
+ANGLE_DEFINITION_VERSION = 'smd-v4-2026-10-10-fixed-range'
 
 
 # =============================================================================
@@ -186,33 +188,22 @@ V4_NAMES = {
 
 ANGLE_CHANNELS = list(V4_NAMES)
 
-#: Channels unwrapped across +/-180 deg: the set the SMD v4 text layer unwraps.
-#: Shoulder and hip flexion are deliberately absent; v4 keeps them in [-90, 270).
-WRAPPABLE_ANGLES = {
-    'pelvis_flexion', 'pelvis_adduction', 'pelvis_rotation',
-    'left_hip_rotation', 'right_hip_rotation',
-    'lumbar_rotation',
-    'left_shoulder_rotation', 'right_shoulder_rotation',
-    'neck_flexion', 'neck_bending',
-}
-
-
-def unwrap_angles(values):
-    """
-    Remove +/-360 deg jumps from an angle series (shortest path between
-    consecutive frames), then shift the whole series by a multiple of 360 so its
-    median lies in [-180, 180). NaN frames are skipped and stay NaN.
-    """
-    out = np.asarray(values, dtype=float).copy()
-    ok = np.flatnonzero(np.isfinite(out))
-    if ok.size == 0:
-        return out
-    x = out[ok]
-    steps = (np.diff(x) + 180.0) % 360.0 - 180.0
-    x = x[0] + np.concatenate([[0.0], np.cumsum(steps)])
-    x -= 360.0 * np.floor((np.median(x) + 180.0) / 360.0)
-    out[ok] = x
-    return out
+#: Fixed range of every channel, in degrees (the v4 definitions guarantee it).
+#: Nothing is unwrapped, so no value ever leaves its range: shoulder and hip
+#: flexion span [-90, 270) so that an arm overhead reads ~175 without a jump,
+#: and every other channel lies within [-180, 180].
+ANGLE_RANGES = {name: (-180.0, 180.0) for name in V4_NAMES}
+ANGLE_RANGES.update({
+    'left_shoulder_flexion': (-90.0, 270.0), 'right_shoulder_flexion': (-90.0, 270.0),
+    'left_hip_flexion': (-90.0, 270.0), 'right_hip_flexion': (-90.0, 270.0),
+    'left_knee_flexion': (0.0, 180.0), 'right_knee_flexion': (0.0, 180.0),
+    'left_elbow_flexion': (0.0, 180.0), 'right_elbow_flexion': (0.0, 180.0),
+    'left_ankle_flexion': (-90.0, 90.0), 'right_ankle_flexion': (-90.0, 90.0),
+    'left_hip_abduction': (-90.0, 90.0), 'right_hip_abduction': (-90.0, 90.0),
+    'left_shoulder_abduction': (-90.0, 90.0), 'right_shoulder_abduction': (-90.0, 90.0),
+    'pelvis_adduction': (-90.0, 90.0),
+    'lumbar_bending': (-90.0, 90.0), 'neck_bending': (-90.0, 90.0),
+})
 
 
 # =============================================================================
@@ -263,9 +254,6 @@ def extract_all_joint_angles(joint_positions, fps=30.0, info=None):
         )
         for name, v4_name in V4_NAMES.items():
             angles[name][valid] = raw[v4_name]
-
-    for name in WRAPPABLE_ANGLES:
-        angles[name] = unwrap_angles(angles[name])
 
     fps = float(fps) if fps else 30.0
     return angles, np.arange(T) / fps

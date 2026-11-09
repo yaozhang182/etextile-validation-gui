@@ -427,8 +427,16 @@ about 175 and never jumps to −185. When the arm or leg points straight out to
 the side, flexion has no defined value; those frames are filled in by
 interpolation from the frames around them.
 
-**Twists** — pelvis rotation, lumbar rotation, shoulder and hip rotation — are
-continuous: they are unwrapped, so a turn past ±180 does not show as a jump.
+**Twists** — pelvis rotation, lumbar rotation, shoulder and hip rotation — lie
+between −180 and 180.
+
+No channel ever leaves its range: shoulder and hip flexion stay within −90 to
+270, every other channel within −180 to 180 (knee and elbow 0 to 180; ankle,
+abduction and side-bending channels −90 to 90). Nothing is unwrapped, so a value
+can only jump if the angle really passes ±180, which a joint does not do. The one
+exception is `pelvis_rotation` when the participant turns to face away from the
+camera, and the pose tracker cannot follow that anyway.
+
 Shoulder rotation is the twist of the forearm about the upper arm, and it only
 exists while the elbow is bent: with the elbow nearly straight (under 20°) or
 the arm pointing straight up, it is interpolated. When that applies to more than
@@ -486,17 +494,18 @@ Every channel that depends on the reconstructed joints is flagged in the
 **Tracking Quality** view, because those carry a geometric assumption on top of
 whatever the tracking confidence says.
 
-#### Changes in version 0.2.4
+#### Changes in versions 0.2.4 and 0.2.5
 
-Version 0.2.4 replaced the angle computation with the SMD v4 definitions. The
-older definitions unwrapped shoulder flexion over the whole recording, so a
-single badly tracked frame could shift every later value by 360°; swapped
+Version 0.2.4 replaced the angle computation with the SMD v4 definitions, and
+0.2.5 stopped unwrapping the twist channels so that every channel stays in its
+fixed range. The older definitions unwrapped shoulder flexion over the whole
+recording, so a single badly tracked frame could shift every later value by 360°; swapped
 forward and sideways pelvis tilt once the participant turned; measured lumbar
 rotation from the right shoulder only; under-read shoulder and hip rotation
 whenever the elbow or knee was straight; and used opposite signs on the two
 sides for hip abduction and for hip and shoulder rotation. Angles cached by an
 older version are recomputed automatically from the cached skeleton the next
-time the session is added, so models trained before 0.2.4 should be retrained.
+time the session is added, so models trained before 0.2.5 should be retrained.
 
 ---
 

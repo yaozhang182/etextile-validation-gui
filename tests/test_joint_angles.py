@@ -18,8 +18,8 @@ sys.path.insert(0, ROOT)
 
 from core import smd_angle_calculator as v4  # noqa: E402
 from core.joint_angles import (  # noqa: E402
-    ANGLE_CHANNELS, SMD_ANGLE_SOURCE_MD5, V4_NAMES, WRAPPABLE_ANGLES,
-    extract_all_joint_angles, unwrap_angles,
+    ANGLE_CHANNELS, ANGLE_RANGES, SMD_ANGLE_SOURCE_MD5, V4_NAMES,
+    extract_all_joint_angles,
 )
 
 SOURCE = ('/scratch/elec/t412-humanmotion/yaozhang/smd_reasoning/'
@@ -82,7 +82,7 @@ def test_vendored_calculator_matches_the_source_when_available():
 
 
 def test_channels_equal_the_v4_reference_on_real_data():
-    """Every channel equals the v4 calculator (mod 360 for unwrapped channels)."""
+    """Every channel equals the v4 calculator exactly (nothing is unwrapped)."""
     joints = np.load(EXAMPLE)['__smplh__'].astype(float)
     ref = v4.compute_all_joint_angles(joints, 'humanml3d', fix_chirality=True,
                                       fix_flex_singularity=True, fix_angle_defs=True)
@@ -97,10 +97,7 @@ def test_channels_equal_the_v4_reference_on_real_data():
     angles, time = extract_all_joint_angles(joints, fps=30.0)
     assert set(angles) == set(ANGLE_CHANNELS) and len(ANGLE_CHANNELS) == 26
     for name, v4_name in V4_NAMES.items():
-        diff = angles[name] - ref[v4_name]
-        if name in WRAPPABLE_ANGLES:
-            diff = (diff + 180.0) % 360.0 - 180.0
-        assert np.max(np.abs(diff)) < 1e-6, name
+        assert np.max(np.abs(angles[name] - ref[v4_name])) < 1e-6, name
     assert np.allclose(np.diff(time), 1 / 30.0)
 
 
@@ -186,15 +183,23 @@ def test_untracked_frames_stay_nan():
     assert len(time) == 100
 
 
-def test_unwrap_removes_jumps_and_recentres():
-    x = np.array([170.0, 179.0, -178.0, -170.0, np.nan, -160.0])
-    u = unwrap_angles(x)
-    assert np.isnan(u[4])
-    finite = u[np.isfinite(u)]
-    assert np.max(np.abs(np.diff(finite))) < 20
-    assert -180 <= np.median(finite) < 180
-    assert np.allclose((u[np.isfinite(u)] - x[np.isfinite(x)]) % 360, 0)
-    assert np.allclose(unwrap_angles(np.array([500.0, 510.0])), [140.0, 150.0])
+def test_every_channel_stays_in_its_fixed_range():
+    """
+    No value may leave its channel's range: not on the four example recordings
+    (session 1's left shoulder rotation went up to 420 when it was unwrapped),
+    and not on badly tracked skeletons (random joints).
+    """
+    rng = np.random.default_rng(0)
+    clips = [np.load(EXAMPLE.replace('session_1', f'session_{n}'))['__smplh__']
+             for n in (1, 2, 3, 4)]
+    clips += [standing_skeleton() + rng.normal(0, s, (300, 22, 3)) for s in (0.02, 0.1, 0.5)]
+    assert set(ANGLE_RANGES) == set(ANGLE_CHANNELS)
+    for joints in clips:
+        angles, _ = extract_all_joint_angles(np.asarray(joints, float))
+        for name, (lo, hi) in ANGLE_RANGES.items():
+            v = angles[name]
+            assert np.all(np.isfinite(v)), name
+            assert v.min() >= lo - 1e-6 and v.max() <= hi + 1e-6, (name, v.min(), v.max())
 
 
 def main():
