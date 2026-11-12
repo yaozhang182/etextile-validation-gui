@@ -17,8 +17,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.joint_angles import extract_all_joint_angles  # noqa: E402
 from core.targets import (  # noqa: E402
-    COMPONENTS, DISPLAY_ONLY, ELEVATION_TARGETS, TARGET_CHANNELS, VECTOR_TARGETS,
-    angle_between, evaluate_targets, expand_targets, postprocess, target_slices,
+    COMPONENTS, DISPLAY_GROUPS, DISPLAY_ONLY, ELEVATION_TARGETS, TARGET_CHANNELS,
+    VECTOR_TARGETS, angle_between, display_only_reason, evaluate_targets, expand_targets, postprocess, target_slices,
 )
 from test_joint_angles import EXAMPLE, MIRROR_PERM, standing_skeleton, _place_right_arm  # noqa: E402
 
@@ -99,6 +99,33 @@ def test_display_only_channels_are_never_targets():
     for side in SIDES:
         for dof in ('flexion', 'abduction', 'rotation'):
             assert f'{side}_shoulder_{dof}' in DISPLAY_ONLY
+
+
+def test_trunk_channels_a_webcam_cannot_measure_are_display_only():
+    """
+    MediaPipe has no spine: the reconstructed pelvis lies on the hip-to-neck
+    line, so lumbar extension is identically 0, and the pelvis angles are the
+    trunk's orientation relative to the camera.
+    """
+    joints, a = _example()
+    assert np.max(np.abs(a['lumbar_extension'])) < 1e-3   # float32 joints
+    for name in ('lumbar_extension', 'pelvis_flexion', 'pelvis_adduction',
+                 'pelvis_rotation'):
+        assert name in DISPLAY_ONLY and name not in TARGET_CHANNELS, name
+    for name in ('lumbar_bending', 'lumbar_rotation', 'neck_flexion'):
+        assert name in TARGET_CHANNELS, name
+    assert 'always 0' in display_only_reason('lumbar_extension')
+    assert 'camera' in display_only_reason('pelvis_flexion')
+    assert display_only_reason('right_elbow_flexion') == ''
+
+
+def test_every_channel_is_either_a_target_or_display_only():
+    from core.joint_angles import ANGLE_CHANNELS
+    shown = [n for names in DISPLAY_GROUPS.values() for n in names]
+    assert sorted(shown) == sorted(DISPLAY_ONLY)
+    assert all(display_only_reason(n) for n in DISPLAY_ONLY)
+    for name in ANGLE_CHANNELS:
+        assert (name in TARGET_CHANNELS) != (name in DISPLAY_ONLY), name
 
 
 def test_expansion_and_slices():

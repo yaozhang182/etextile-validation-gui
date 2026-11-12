@@ -129,6 +129,10 @@ def main():
         if cb is not None:
             cb.setChecked(True)
     app.processEvents()
+    sc = window.tab_comparison.scrubber
+    if window.tab_comparison._cursor is not None:   # put the cursor mid-movement
+        sc.set_frame(200)
+        app.processEvents()
     shoot(window, 'tab3_angles_sensors')
 
     # --- Tab 4 ---------------------------------------------------------
@@ -163,6 +167,12 @@ def main():
     window.tab_results.refresh()
     app.processEvents()
     shoot(window, 'tab5_results')
+    r = window.tab_results
+    if r.sphere_group.isVisible():
+        r.sphere_slider.setValue(int(r.sphere_slider.maximum() * 0.4))
+        app.processEvents()
+        r.canvas_sphere.draw()
+        shoot(r.sphere_group, 'tab5_directions')
 
     # --- Add Subject dialog, valid and blocked -------------------------
     from gui.panels.data_import import AddSubjectDialog

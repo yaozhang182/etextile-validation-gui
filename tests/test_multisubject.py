@@ -434,8 +434,8 @@ def test_tab3_plots_both_streams_on_one_clock():
     w.tab_comparison.refresh()
 
     panel = w.tab_comparison
-    panel.angle_checkboxes['pelvis_flexion'].setChecked(True)
-    s['angles']['pelvis_flexion'] = s['angles']['a1']      # give it real values
+    panel.angle_checkboxes['lumbar_bending'].setChecked(True)
+    s['angles']['lumbar_bending'] = s['angles']['a1']      # give it real values
     panel._update_plot()
 
     angle_x = panel.ax_angle.lines[0].get_xdata()
@@ -463,8 +463,8 @@ def test_tab3_says_so_when_it_cannot_align_the_panels():
     w.tab_comparison.refresh()
 
     panel = w.tab_comparison
-    s['angles']['pelvis_flexion'] = s['angles']['a1']
-    panel.angle_checkboxes['pelvis_flexion'].setChecked(True)
+    s['angles']['lumbar_bending'] = s['angles']['a1']
+    panel.angle_checkboxes['lumbar_bending'].setChecked(True)
     panel._update_plot()
 
     assert 'not on a common clock' in panel.info_label.text(), panel.info_label.text()
@@ -476,11 +476,11 @@ def test_tab3_says_so_when_it_cannot_align_the_panels():
 
     # ...and it must go away again once a well-formed subject is selected.
     good = fake_subject('S2', 200, 400, 1e9)
-    good['angles']['pelvis_flexion'] = good['angles']['a1']
+    good['angles']['lumbar_bending'] = good['angles']['a1']
     w.state['train_subjects'].append(good)
     panel.refresh()
     panel.subject_combo.setCurrentIndex(1)
-    panel.angle_checkboxes['pelvis_flexion'].setChecked(True)
+    panel.angle_checkboxes['lumbar_bending'].setChecked(True)
     panel._update_plot()
     assert panel.info_label.property('warning') is False, panel.info_label.text()
     assert 'both streams cover' in panel.info_label.text(), panel.info_label.text()

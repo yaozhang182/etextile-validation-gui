@@ -450,8 +450,10 @@ by how far in front of or behind the body the arm is, which a single camera
 estimates poorly: it tends to place a sideways arm somewhat behind the body.
 An arm held out to the side and estimated a little behind the body then sits
 where flexion runs out of range, and the value flips between about −90 and 270
-although the arm hardly moves. Use the **abduction** channel for side raises; it
-reads about −80 to −90 with the arm horizontal.
+although the arm hardly moves. To follow a side raise, plot the **abduction**
+channel (about −80 to −90 with the arm horizontal), and to train on it use
+`…_shoulder_elevation` or `…_upper_arm_direction` (see
+[Regression targets](#regression-targets)).
 
 **Twists** — pelvis rotation, lumbar rotation, shoulder and hip rotation — lie
 between −180 and 180.
@@ -492,7 +494,7 @@ the anatomical limits.
 | `left_shoulder_abduction` / `right_shoulder_abduction` | arm **toward** the body (smaller = arm out to the side; about −80 is horizontal) | −39 … −2 |
 | `left_shoulder_rotation` / `right_shoulder_rotation` | internal rotation (forearm toward the belly; 0 = forearm pointing forward with the arm hanging) | see above |
 | `left_elbow_flexion` / `right_elbow_flexion` | elbow more bent (0 = straight) | 2 … 67 |
-| `neck_flexion` | head bending down; about 40 is looking straight ahead | 57 … 77 |
+| `neck_flexion` | head bending down; measured to the nose, so sitting upright reads 50 to 80, not 0 | 57 … 77 |
 | `neck_bending` | head tilting toward the right shoulder | −30 … +5 |
 
 The two **abduction** channels keep their names from earlier versions of the
@@ -513,8 +515,26 @@ reconstructs them from the hips and shoulders, and three channels pay for it:
   collarbones, which runs parallel to the shoulder line. Shrugging or pushing
   one shoulder forward moves it a few degrees even when the trunk does not
   twist.
+- **`pelvis_flexion`, `pelvis_adduction` and `pelvis_rotation`** are the
+  trunk's forward lean, sideways lean and heading **relative to the camera**,
+  camera tilt included. They are not joint angles, and a garment sensor cannot
+  know where the camera is.
+- **`neck_flexion`** is measured from the shoulder midpoint to the nose, which
+  sits in front of the neck: sitting upright reads 50 to 80, not 0.
 - **Neck rotation** (turning the head left or right) is not a channel at all:
   two head points are not enough to measure it.
+
+Two more things come from the tracker itself, not from the reconstruction:
+
+- MediaPipe places the hips with a consistent depth error. In every recording
+  checked so far the hip line and the shoulder line were turned in opposite
+  directions by 7 to 14 degrees each, so **`lumbar_rotation` carries an offset
+  of about −20°** even when the trunk is not twisted. Its changes are usable,
+  its absolute value is not.
+- Knee and ankle angles of a person standing face-on to the camera are mostly a
+  matter of depth, which a single camera estimates worst. A participant
+  standing straight can read 20 to 50 degrees of knee flexion. Treat leg
+  channels with caution unless the camera sees the legs from the side.
 
 Every channel that depends on the reconstructed joints is flagged in the
 **Tracking Quality** view, because those carry a geometric assumption on top of
@@ -526,16 +546,18 @@ Not every joint angle makes a good thing to predict. Shoulder and hip flexion,
 abduction and rotation describe a movement well, but each has a pose where it is
 undefined and a point where its value jumps by 360° although the limb hardly
 moves (see above). A model trained on such a channel is punished by hundreds of
-degrees for a jump no sensor could follow. Those six channels per side, and the
-body heading (`pelvis_rotation`), are therefore listed under **Display only**:
-you can plot them, but not train on them.
+degrees for a jump no sensor could follow. Those six channels per side are
+therefore listed under **Display only**: you can plot them, but not train on
+them. So are the three pelvis angles, which are measured against the camera,
+and `lumbar_extension`, which is always 0 (see
+[What the webcam skeleton cannot measure](#what-the-webcam-skeleton-cannot-measure)).
 
 The **Targets** list offers quantities that are continuous in every pose:
 
 | Target | What it is | Range |
 |---|---|---|
 | `…_elbow_flexion`, `…_knee_flexion`, `…_ankle_flexion` | the hinge angles, as above | degrees |
-| trunk and neck angles | as above; normal movement never reaches their singular poses | degrees |
+| `lumbar_bending`, `lumbar_rotation`, `neck_flexion`, `neck_bending` | the trunk's side bend and twist relative to the pelvis, and the neck, as above; normal movement never reaches their singular poses | degrees |
 | `left_shoulder_elevation` / `right_…`, `…_hip_elevation` | how far the upper arm (thigh) is raised from hanging straight down, in whatever direction | 0° hanging, 90° horizontal, 180° straight up |
 | `…_upper_arm_direction`, `…_forearm_direction` | where the segment points, as a unit vector in the chest's frame | three numbers, −1 to 1 |
 | `…_thigh_direction`, `…_shank_direction` | the same for the leg, in the pelvis's frame | three numbers, −1 to 1 |
@@ -568,8 +590,10 @@ sides for hip abduction and for hip and shoulder rotation. Angles cached by an
 older version are recomputed automatically from the cached skeleton the next
 time the session is added, so models trained before 0.2.5 should be retrained.
 Version 0.2.6 replaced shoulder and hip flexion, abduction and rotation as
-training targets by the elevation and direction targets above, and standardises
-every target before training so that angles and unit vectors weigh equally.
+training targets by the elevation and direction targets above, made the pelvis
+angles and lumbar extension display only, and standardises every target before
+training so that angles and unit vectors weigh equally. It also added the video
+cursor in Tab 3 and the direction view in Tab 5.
 
 ---
 
@@ -658,7 +682,7 @@ What each one is:
 | **Per-Subject Results** | the same metrics for each test session separately (shown when there are several) |
 | **Metrics Summary** | per-joint metrics, plus the ground truth's tracking confidence |
 | **Prediction vs Ground Truth** | one panel per target: the true trace in black, the model's in red; a direction shows its three components, true solid and predicted dashed |
-| **Directions in 3D** | for direction targets: where the limb pointed (black) and where the model said it pointed (red), drawn on a unit sphere; the slider steps through the test recording |
+| **Directions in 3D** | shown when a direction target was trained: where the limb pointed (black) and where the model said it pointed (red) as two arrows on a unit sphere, with the error angle between them in orange; the slider steps through the test recording, and dragging the sphere turns the view |
 | **Sensor Importance** | which channels the model relied on |
 | **Export Metrics CSV** | the metrics table as CSV |
 | **Export Report** | a text summary |
@@ -672,6 +696,14 @@ give one number per channel; the curves show *where* the error is — a constant
 offset, drift over the recording, or a particular movement the sensors miss
 entirely. The tab scrolls, so keep going down for the sensor chart and the
 export buttons.
+
+**Directions in 3D** shows a direction target as what it is, a point on a
+sphere. Drag the slider to step through the test recording: the black arrow is
+where the limb pointed in the video, the red one where the model said it
+pointed, and the orange arc between their tips is the error of that moment.
+Drag the sphere itself to look from another side.
+
+![Directions in 3D](img/tab5_directions.png)
 
 **Sensor Importance** is what feeds back into garment design — a channel with
 near-zero importance is not contributing and could be moved or removed.

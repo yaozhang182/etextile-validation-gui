@@ -144,7 +144,9 @@ def test_tab3_annotates_channels_with_confidence():
     # Keys stay canonical so the selection logic is unaffected by relabelling.
     assert 'right_elbow_flexion' in boxes
     assert '(' in boxes['right_elbow_flexion'].text()
-    assert boxes['lumbar_extension'].toolTip()
+    assert boxes['lumbar_bending'].toolTip()
+    zero = w.tab_comparison.display_checkboxes['lumbar_extension'].toolTip()
+    assert 'always 0' in zero and 'synthesised' in zero, zero
 
     good = boxes['right_elbow_flexion'].text()
     poor = boxes['left_forearm_direction'].text()

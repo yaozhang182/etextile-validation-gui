@@ -83,7 +83,9 @@ HELP = {
         "A direction is a unit vector (forward, up, outward).<br><br>"
         "Shoulder and hip flexion, abduction and rotation are listed under "
         "<i>Display only</i>: they jump or are undefined in some poses, so they "
-        "can be plotted but not trained on.<br><br>"
+        "can be plotted but not trained on. So are the pelvis angles, which are "
+        "measured against the camera, and lumbar extension, which a webcam "
+        "skeleton always reads as 0.<br><br>"
         "<b>Click for what each target means.</b>",
         "#regression-targets",
     ),
@@ -110,9 +112,12 @@ HELP = {
         "A direction target is a point on a sphere around the joint: where the "
         "upper arm, forearm, thigh or shank pointed, relative to the chest (arm) "
         "or the pelvis (leg). Black is the ground truth from the video, red the "
-        "model's prediction. The arrows show one moment; move the slider to step "
-        "through the test recording.<br><br>The error of a frame is the angle "
-        "between the two arrows.",
+        "model's prediction, for one moment of the test recording: move the "
+        "slider to step through it, and drag the sphere with the mouse to look "
+        "from another side. The orange arc between the two tips is the error of "
+        "that moment, the angle between the arrows.<br><br>This panel appears "
+        "when a direction target (e.g. right_upper_arm_direction) was among the "
+        "targets the model was trained on.",
         "#tab-5--results",
     ),
     'sensor_inputs': (

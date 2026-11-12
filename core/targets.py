@@ -10,8 +10,9 @@ sees a jump of hundreds of degrees where the limb hardly moved.
 
 The targets offered for training are therefore continuous everywhere:
 
-- hinge angles (knee, elbow, ankle) and the trunk and neck angles, which never
-  reach a singular point in normal movement, as computed by core.joint_angles;
+- hinge angles (knee, elbow, ankle), the trunk's side bend and twist relative
+  to the pelvis, and the neck angles, which never reach a singular point in
+  normal movement, as computed by core.joint_angles;
 - the **elevation** of the upper arm and of the thigh: the angle between the
   limb and its hanging-down direction, 0 (hanging) to 180 (straight up),
   whatever the direction of the raise;
@@ -21,8 +22,12 @@ The targets offered for training are therefore continuous everywhere:
   included, and stay defined with a straight elbow, where shoulder rotation is
   not.
 
-Shoulder and hip flexion / abduction / rotation and the body heading
-(pelvis_rotation) stay available for display only.
+Shoulder and hip flexion / abduction / rotation stay available for display
+only, and so do three trunk channels that a webcam skeleton cannot give
+meaning to as targets: the body's orientation relative to the camera
+(pelvis_flexion, pelvis_adduction, pelvis_rotation), which no garment sensor
+can know, and lumbar_extension, which is always 0 because MediaPipe has no
+spine and the reconstructed trunk is one straight segment.
 
 The frames are exactly those of the SMD v4 angle calculator, so for every frame
 where flexion and abduction are defined:
@@ -69,21 +74,42 @@ ELEVATION_TARGETS = {
     'right_hip_elevation': 'right_thigh',
 }
 
+_LIMB_ANGLES = [f'{side}_{joint}_{dof}' for side in ('left', 'right')
+                for joint in ('shoulder', 'hip')
+                for dof in ('flexion', 'abduction', 'rotation')]
+_CAMERA_FRAME = ['pelvis_flexion', 'pelvis_adduction', 'pelvis_rotation']
+_ALWAYS_ZERO = ['lumbar_extension']
+
 #: Channels kept for display but never offered as training targets.
-DISPLAY_ONLY = (
-    [f'{side}_{joint}_{dof}' for side in ('left', 'right')
-     for joint in ('shoulder', 'hip')
-     for dof in ('flexion', 'abduction', 'rotation')]
-    + ['pelvis_rotation']
+DISPLAY_ONLY = _LIMB_ANGLES + _CAMERA_FRAME + _ALWAYS_ZERO
+
+#: Why display-only channels cannot be targets (the section's tooltip).
+DISPLAY_ONLY_REASON = (
+    "Display only: these channels can be plotted but not trained on. Shoulder "
+    "and hip angles have a pose where they are undefined and a point where they "
+    "jump by 360 degrees; the pelvis angles are measured against the camera, "
+    "not the body; lumbar extension is always 0 with a webcam skeleton."
 )
 
-#: Why each kind of display-only channel cannot be a target (tooltips, docs).
-DISPLAY_ONLY_REASON = (
-    "Display only: this angle has a singular point (undefined with the limb "
-    "straight out to the side, or with the elbow straight for rotation) and a "
-    "point where it jumps by 360 degrees, which a regression loss cannot handle. "
-    "Use the elevation and direction targets instead."
-)
+_REASONS = {
+    **{n: ("Display only: this angle has a singular point (undefined with the "
+           "limb straight out to the side, or with the elbow or knee straight "
+           "for rotation) and a point where it jumps by 360 degrees, which a "
+           "regression loss cannot handle. Use the elevation and direction "
+           "targets instead.") for n in _LIMB_ANGLES},
+    **{n: ("Display only: this is the trunk's lean or heading relative to the "
+           "camera, camera tilt included, not a joint angle. A garment sensor "
+           "cannot know where the camera is.") for n in _CAMERA_FRAME},
+    'lumbar_extension': (
+        "Display only: always 0. The webcam skeleton has no spine, so the trunk "
+        "is one straight segment from the hips to the shoulders and cannot bend "
+        "within itself; forward lean shows in pelvis_flexion instead."),
+}
+
+
+def display_only_reason(name):
+    """Why `name` is display only (tooltip text), or '' if it is a target."""
+    return _REASONS.get(name, '')
 
 #: How the targets are grouped in Tab 3.
 TARGET_GROUPS = {
@@ -96,8 +122,7 @@ TARGET_GROUPS = {
     'Hip R': ['right_hip_elevation', 'right_thigh_direction', 'right_shank_direction'],
     'Knee': ['left_knee_flexion', 'right_knee_flexion'],
     'Ankle': ['left_ankle_flexion', 'right_ankle_flexion'],
-    'Trunk': ['pelvis_flexion', 'pelvis_adduction', 'lumbar_extension',
-              'lumbar_bending', 'lumbar_rotation'],
+    'Trunk': ['lumbar_bending', 'lumbar_rotation'],
     'Neck': ['neck_flexion', 'neck_bending'],
 }
 
@@ -108,7 +133,8 @@ DISPLAY_GROUPS = {
                    'right_shoulder_rotation'],
     'Hip L': ['left_hip_flexion', 'left_hip_abduction', 'left_hip_rotation'],
     'Hip R': ['right_hip_flexion', 'right_hip_abduction', 'right_hip_rotation'],
-    'Pelvis': ['pelvis_rotation'],
+    'Trunk': ['pelvis_flexion', 'pelvis_adduction', 'pelvis_rotation',
+              'lumbar_extension'],
 }
 
 TARGET_CHANNELS = [n for names in TARGET_GROUPS.values() for n in names]

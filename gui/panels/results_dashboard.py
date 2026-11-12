@@ -102,6 +102,7 @@ class ResultsDashboardPanel(QWidget):
         row.addWidget(self.sphere_subject)
         row.addStretch()
         sph.addLayout(row)
+        self._sphere = None
         self.fig_sphere = Figure(figsize=(6, 5))
         self.canvas_sphere = FigureCanvas(self.fig_sphere)
         self.canvas_sphere.setMinimumHeight(420)
@@ -109,7 +110,7 @@ class ResultsDashboardPanel(QWidget):
         srow = QHBoxLayout()
         srow.addWidget(QLabel("Sample:"))
         self.sphere_slider = QSlider(Qt.Orientation.Horizontal)
-        self.sphere_slider.valueChanged.connect(self._plot_sphere)
+        self.sphere_slider.valueChanged.connect(self._update_sphere)
         srow.addWidget(self.sphere_slider, stretch=1)
         self.sphere_label = QLabel("")
         srow.addWidget(self.sphere_label)
@@ -188,6 +189,7 @@ class ResultsDashboardPanel(QWidget):
                                (self.fig_sphere, self.canvas_sphere)):
             figure.clf()
             canvas.draw()
+        self._sphere = None
         # clf() dropped the axes this attribute referred to
         self.ax_importance = self.fig_importance.add_subplot(111)
 
@@ -392,9 +394,24 @@ class ResultsDashboardPanel(QWidget):
         self.sphere_slider.blockSignals(False)
         self._plot_sphere()
 
+    # Drawn as (forward, outward, up) so "up" is vertical on screen.
+    @staticmethod
+    def _sphere_xyz(v):
+        v = np.atleast_2d(v)
+        return v[:, 0], v[:, 2], v[:, 1]
+
     def _plot_sphere(self):
-        """Truth and prediction of one direction target as paths on the unit sphere."""
-        from core.targets import target_slices, angle_between
+        """
+        Set up the sphere for the chosen target and subject. Only the two
+        arrows of the current sample are drawn; the slider moves them
+        (_update_sphere) and the view can be turned by dragging with the mouse.
+        """
+        from core.targets import target_slices
+        view = None
+        if getattr(self, '_sphere', None) is not None:
+            ax = self._sphere['ax']
+            view = (ax.elev, ax.azim)
+        self._sphere = None
         self.fig_sphere.clear()
         series = self.state.get('predictions_per_subject') or {}
         name, sid = self.sphere_target.currentText(), self.sphere_subject.currentText()
@@ -403,23 +420,20 @@ class ResultsDashboardPanel(QWidget):
             return
         sl = dict(target_slices(self._target_names(self.state['metrics'])))[name]
         truth, pred = series[sid][0][:, sl], series[sid][1][:, sl]
-        i = min(self.sphere_slider.value(), len(truth) - 1)
-
-        # Drawn as (forward, outward, up) so "up" is vertical on screen.
-        def xyz(v):
-            v = np.atleast_2d(v)
-            return v[:, 0], v[:, 2], v[:, 1]
 
         ax = self.fig_sphere.add_subplot(111, projection='3d')
         u, w = np.mgrid[0:2 * np.pi:24j, 0:np.pi:13j]
         ax.plot_wireframe(np.cos(u) * np.sin(w), np.sin(u) * np.sin(w), np.cos(w),
                           color='#b0bec5', linewidth=0.4, alpha=0.5)
-        ax.plot(*xyz(truth), color='black', linewidth=0.8, alpha=0.6, label='truth')
-        ax.plot(*xyz(pred), color='#d32f2f', linewidth=0.8, alpha=0.6, label='prediction')
-        for v, color in ((truth[i], 'black'), (pred[i], '#d32f2f')):
-            x, y, z = xyz(v)
-            ax.quiver(0, 0, 0, x[0], y[0], z[0], color=color, linewidth=2.2,
-                      arrow_length_ratio=0.12)
+        # body reference: hanging straight down
+        ax.plot([0, 0], [0, 0], [0, -1], color='#90a4ae', linewidth=1, linestyle=':')
+        arrows = {}
+        for key, color, label in (('truth', 'black', 'truth (video)'),
+                                  ('pred', '#d32f2f', 'prediction')):
+            line, = ax.plot([0, 0], [0, 0], [0, 0], color=color, linewidth=2.5, label=label)
+            tip, = ax.plot([0], [0], [0], 'o', color=color, markersize=7)
+            arrows[key] = (line, tip)
+        arc, = ax.plot([0], [0], [0], color='#ff9800', linewidth=2, label='error angle')
         ax.set_xlabel('forward')
         ax.set_ylabel('outward')
         ax.set_zlabel('up')
@@ -428,15 +442,47 @@ class ResultsDashboardPanel(QWidget):
         for ticks in (ax.set_xticks, ax.set_yticks, ax.set_zticks):
             ticks([-1, 0, 1])
         ax.set_box_aspect((1, 1, 1))
-        ax.view_init(elev=18, azim=-60)
+        # default: seen from the front and the outer side, where the arm moves
+        ax.view_init(*(view or (15, 20)))
         ax.legend(loc='upper left', fontsize=8)
-        err = float(angle_between(truth[i:i + 1], pred[i:i + 1])[0])
-        mean_err = float(np.mean(angle_between(truth, pred)))
-        ax.set_title(f"{name} — {sid}", fontsize=10)
+        ax.set_title(f"{name} — {sid}   (drag to turn)", fontsize=10)
+        self._sphere = {'ax': ax, 'truth': truth, 'pred': pred, 'arrows': arrows,
+                        'arc': arc,
+                        'mean_err': float(np.mean(self._angle_between(truth, pred)))}
+        self._update_sphere()
+
+    @staticmethod
+    def _angle_between(a, b):
+        from core.targets import angle_between
+        return angle_between(a, b)
+
+    def _update_sphere(self):
+        """Move the arrows to the slider's sample, keeping the current view."""
+        from core.targets import unit
+        sp = getattr(self, '_sphere', None)
+        if sp is None:
+            return
+        truth, pred = sp['truth'], sp['pred']
+        i = min(self.sphere_slider.value(), len(truth) - 1)
+        t, p = unit(truth[i:i + 1])[0], unit(pred[i:i + 1])[0]
+        for key, v in (('truth', t), ('pred', p)):
+            line, tip = sp['arrows'][key]
+            x, y, z = self._sphere_xyz(v)
+            line.set_data_3d([0, x[0]], [0, y[0]], [0, z[0]])
+            tip.set_data_3d(x, y, z)
+        # the great-circle arc between the two tips: its length is the error
+        err = float(self._angle_between(t[None], p[None])[0])
+        omega = np.radians(err)
+        s = np.linspace(0, 1, 30)[:, None]
+        if omega > 1e-6:
+            arc = (np.sin((1 - s) * omega) * t + np.sin(s * omega) * p) / np.sin(omega)
+        else:
+            arc = np.repeat(t[None], 30, axis=0)
+        sp['arc'].set_data_3d(*self._sphere_xyz(arc * 1.02))
         self.sphere_label.setText(
             f"sample {i} of {len(truth) - 1}   ·   error here {err:.1f}°   ·   "
-            f"mean {mean_err:.1f}°")
-        self.canvas_sphere.draw()
+            f"mean {sp['mean_err']:.1f}°")
+        self.canvas_sphere.draw_idle()
 
     def _export_csv(self):
         metrics = self.state.get('metrics')

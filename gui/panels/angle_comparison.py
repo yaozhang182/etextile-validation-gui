@@ -22,10 +22,11 @@ from gui import help as help_ui
 from gui.panels.video_scrubber import VideoScrubber
 
 # Regression targets and display-only angles, grouped by body part. Shoulder
-# and hip flexion / abduction / rotation can be plotted but not trained on; see
-# core/targets.py for why.
+# and hip flexion / abduction / rotation, the pelvis angles and lumbar
+# extension can be plotted but not trained on; see core/targets.py for why.
 from core.targets import (  # noqa: E402
     TARGET_GROUPS, DISPLAY_GROUPS, DISPLAY_ONLY_REASON, VECTOR_TARGETS,
+    display_only_reason,
     COMPONENTS, is_vector,
 )
 ANGLE_GROUPS = TARGET_GROUPS
@@ -474,7 +475,7 @@ class AngleComparisonPanel(QWidget):
             if is_synthesised(name):
                 notes.append("synthesised pelvis/spine")
             if name in self.display_checkboxes:
-                notes.append(DISPLAY_ONLY_REASON.rstrip('.'))
+                notes.append(display_only_reason(name).rstrip('.'))
             elif is_vector(name):
                 notes.append("unit vector in the chest (arm) or pelvis (leg) frame, "
                              "components forward / up / outward")
@@ -484,7 +485,7 @@ class AngleComparisonPanel(QWidget):
                 set_style_property(cb, "lowConfidence", False)
                 cb.setToolTip(
                     "Extract a skeleton in Tab 1 to see tracking confidence."
-                    + (f"\nNote: {notes[0]}." if notes else "")
+                    + "".join(f"\nNote: {n}." for n in notes)
                 )
                 continue
 
