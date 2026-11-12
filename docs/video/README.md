@@ -29,3 +29,8 @@ interface → re-run all three. `tts.py` skips clips that already exist, so dele
 
 `capture.py` limits PyTorch to two threads by default. With one thread per core on
 a machine that grants the process only a few cores, training slows dramatically.
+
+If `tts.py` fails with a 403 from `speech.platform.bing.com`, the installed
+`edge-tts` is too old for the service: `pip install --upgrade edge-tts`. The
+service also drops requests now and then (`NoAudioReceived`); just run `tts.py`
+again, it continues where it stopped.

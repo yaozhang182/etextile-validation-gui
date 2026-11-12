@@ -647,7 +647,7 @@ class AngleComparisonPanel(QWidget):
                         color = plot_channel(self.ax_dir, key, f"{name}.{comp}",
                                              styles[comp], color, unit='')
             self.ax_dir.set_ylim(-1.08, 1.08)
-            self.ax_dir.set_ylabel("Direction\n(unit vector)", fontsize=10)
+            self.ax_dir.set_ylabel("Direction", fontsize=10)
             self.ax_dir.legend(loc='upper right', fontsize=6, ncol=max(1, len(vectors)))
             self.ax_dir.grid(True, alpha=0.3)
         title = f"{self._split.capitalize()} Data"

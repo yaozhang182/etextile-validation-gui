@@ -20,7 +20,7 @@ sys.path.insert(0, ROOT); os.chdir(ROOT)
 import numpy as np
 from PyQt6.QtCore import QPoint, QRect
 from PyQt6.QtGui import QImage, QPainter, QColor
-from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox, QPushButton, QScrollArea
+from PyQt6.QtWidgets import QApplication, QDialog, QLabel, QMessageBox, QPushButton, QScrollArea
 
 app = QApplication(sys.argv)
 from gui.theme import apply_theme; apply_theme(app)
@@ -128,7 +128,8 @@ save('dialog_filled', im, {'dialog': [off[0], off[1], round(dlg.width()*S), roun
                            'report': rect_in(dlg.report, dlg, off), 'ok': rect_in(ok, dlg, off)})
 dlg.sensor_edit.setText(f'{d1}/frames.csv'); dlg.times_edit.setText(f'{d1}/sensor.csv'); dlg._validate(); pump(8)
 im, off = overlay(base, img_of(dlg))
-save('dialog_swapped', im, {'report': rect_in(dlg.report, dlg, off), 'ok': rect_in(ok, dlg, off)})
+save('dialog_swapped', im, {'dialog': [off[0], off[1], round(dlg.width()*S), round(dlg.height()*S)],
+                            'report': rect_in(dlg.report, dlg, off), 'ok': rect_in(ok, dlg, off)})
 dlg.close()
 
 # Session 3 is imported without its cache so that extraction really runs.
@@ -189,7 +190,7 @@ w.tabs.setCurrentIndex(2); pump(10)
 t3 = w.tab_comparison
 t3.angle_scroll.verticalScrollBar().setValue(0); pump(4)
 save('tab3_none', win(), {'angles': rect_in(t3.angle_scroll, w)})
-targets = ['right_shoulder_flexion', 'right_shoulder_abduction', 'right_shoulder_rotation']
+targets = ['right_shoulder_elevation', 'right_upper_arm_direction', 'right_elbow_flexion']
 for n in targets:
     t3.angle_checkboxes[n].setChecked(True)
 pump(6)
@@ -205,6 +206,25 @@ save('tab3_selected', win(), {
     'quick': [min(r[0] for r in qx), min(r[1] for r in qx), max(r[0]+r[2] for r in qx) - min(r[0] for r in qx), max(r[3] for r in qx)],
     'sensors': rect_in(t3.sensor_scroll, w), 'sensor_buttons': rect_in(t3.sensor_buttons, w),
     'plots': rect_in(t3.canvas, w), 'info': rect_in(t3.info_label, w)})
+
+# the Display only section at the bottom of the target list
+disp = [l for l in t3.findChildren(QLabel) if 'Display only' in l.text()][0]
+t3.angle_scroll.ensureWidgetVisible(t3.display_checkboxes['right_shoulder_flexion'], 0, 0); pump(6)
+first = rect_in(disp, w); last = rect_in(t3.display_checkboxes['right_shoulder_rotation'], w)
+save('tab3_display', win(), {'display': [first[0], first[1], max(first[2], last[2]),
+                                         last[1] + last[3] - first[1]]})
+t3.angle_scroll.ensureWidgetVisible(t3.angle_checkboxes[targets[0]]); pump(6)
+
+# the video and the cursor across the plots, moving through the arm raise
+sc = t3.scrubber
+cursor_rects = lambda: {'video': rect_in(sc.video_label, w), 'scrub': rect_in(sc.slider, w),
+                        'play': rect_in(sc.play_btn, w), 'values': rect_in(t3.values_label, w),
+                        'plots': rect_in(t3.canvas, w)}
+for i, f in enumerate(range(100, 244, 4)):
+    sc.set_frame(f); pump(4)
+    save(f'tab3_cur{i:02d}', win(), cursor_rects())
+sc.set_frame(170); pump(6)
+save('tab3_cursor', win(), cursor_rects())
 
 # ---------------------------------------------------------------- Tab 4
 w.tabs.setCurrentIndex(3); pump(10)
@@ -245,6 +265,18 @@ def results(prefix):
     x = tbl.columnViewportPosition(c); vp = tbl.viewport().mapTo(w, QPoint(0, 0))
     SHOTS[prefix + '_top']['rects']['conf_col'] = [round((vp.x() + x) * S), round((tbl.mapTo(w, QPoint(0,0)).y()) * S),
                                                    round(tbl.columnWidth(c) * S), round(tbl.height() * S)]
+    # the direction target on the unit sphere, stepped through the test recording
+    if t5.sphere_group.isVisible() and prefix == 'tab5':
+        sa.ensureWidgetVisible(t5.sphere_group, 0, 0); pump(8)
+        n = t5.sphere_slider.maximum()
+        for i, k in enumerate(np.linspace(0.25 * n, 0.6 * n, 36).astype(int)):
+            t5.sphere_slider.setValue(int(k)); t5.canvas_sphere.draw(); pump(3)
+            cr = rect_in(t5.canvas_sphere, w)       # the sphere sits in the middle
+            save(f'tab5_sph{i:02d}', win(), {'sphere': [cr[0] + (cr[2] - cr[3]) // 2, cr[1], cr[3], cr[3]],
+                                             'sphere_slider': rect_in(t5.sphere_slider, w),
+                                             'sphere_label': rect_in(t5.sphere_label, w),
+                                             'sphere_group': rect_in(t5.sphere_group, w)})
+        save('tab5_sphere', win(), SHOTS['tab5_sph35']['rects'])
     sa.verticalScrollBar().setValue(sa.verticalScrollBar().maximum()); pump(8)
     exports = [button(t5, 'Export Metrics'), button(t5, 'Export Report'), button(t5, 'Save All Plots')]
     xs = [rect_in(b, w) for b in exports]
