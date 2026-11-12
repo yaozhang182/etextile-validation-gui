@@ -25,7 +25,7 @@ from gui.panels.data_import import read_csv_auto  # noqa: E402
 from gui.state import make_subject  # noqa: E402
 
 SESSION = os.path.join(ROOT, 'input_data', 'examples_data', 'session_1')
-ANGLES = ['right_shoulder_flexion', 'right_elbow_flexion']
+ANGLES = ['right_shoulder_elevation', 'right_elbow_flexion']
 
 
 def _window():
@@ -53,7 +53,7 @@ def _shown_values(tab):
     """{channel: value string} as displayed above the plots."""
     text = re.sub(r'<[^>]+>', ' ', tab.values_label.text()).replace('&nbsp;', ' ')
     text = text.replace('&#9632;', ' ')
-    return dict(re.findall(r'(\S+)\s+(—|-?\d+\.\d)', text))
+    return dict(re.findall(r'(\S+)\s+(—|-?\d+\.\d+)', text))
 
 
 def test_cursor_follows_the_video_and_shows_values():
@@ -71,7 +71,7 @@ def test_cursor_follows_the_video_and_shows_values():
     for name in ANGLES:
         assert shown[name].rstrip('°') == f"{s['angles'][name][200]:.1f}", name
     # sensor value: linear interpolation at that instant on the shared clock
-    name, x, vals, _ = c['sensors'][0]
+    name, x, vals, _, _ = c['sensors'][0]
     assert shown[name] == f"{np.interp(t, x, vals):.1f}"
     assert 'Frame 200' in tab.cursor_label.text()
 
@@ -145,6 +145,22 @@ def test_hiding_the_tab_pauses_playback():
     w.tabs.setCurrentWidget(w.tab_skeleton)
     _app.processEvents()
     assert not tab.scrubber.playing
+
+
+def test_direction_targets_get_their_own_panel_and_readout():
+    w, tab, s = _window()
+    tab.angle_checkboxes['right_upper_arm_direction'].setChecked(True)
+    _app.processEvents()
+    assert tab.ax_dir is not None and tab.ax_dir in tab._time_axes
+    assert len(tab._cursor['lines']) == 3, "angles, directions and sensors each get a line"
+    tab.scrubber.set_frame(120)
+    _app.processEvents()
+    shown = _shown_values(tab)
+    v = [float(shown[f'right_upper_arm_direction.{c}']) for c in ('fwd', 'up', 'out')]
+    assert abs(np.linalg.norm(v) - 1) < 0.02, v
+    tab.angle_checkboxes['right_upper_arm_direction'].setChecked(False)
+    _app.processEvents()
+    assert tab.ax_dir is None
 
 
 def test_no_angles_means_no_cursor():

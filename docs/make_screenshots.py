@@ -33,7 +33,7 @@ OUT = ROOT / 'docs' / 'img'
 EXAMPLES = ROOT / 'input_data' / 'examples_data'
 WINDOW = (1280, 840)
 
-TARGET_ANGLES = ['right_shoulder_flexion', 'right_shoulder_abduction',
+TARGET_ANGLES = ['right_shoulder_elevation', 'right_upper_arm_direction',
                  'right_elbow_flexion']
 
 

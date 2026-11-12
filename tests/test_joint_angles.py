@@ -95,7 +95,7 @@ def test_channels_equal_the_v4_reference_on_real_data():
             assert np.allclose(ref[name], ref_src[name], atol=1e-9), name
 
     angles, time = extract_all_joint_angles(joints, fps=30.0)
-    assert set(angles) == set(ANGLE_CHANNELS) and len(ANGLE_CHANNELS) == 26
+    assert set(ANGLE_CHANNELS) <= set(angles) and len(ANGLE_CHANNELS) == 26
     for name, v4_name in V4_NAMES.items():
         assert np.max(np.abs(angles[name] - ref[v4_name])) < 1e-6, name
     assert np.allclose(np.diff(time), 1 / 30.0)

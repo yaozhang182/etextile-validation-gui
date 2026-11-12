@@ -40,7 +40,7 @@ SMD_ANGLE_SOURCE_MD5 = '302070cf2d0c01b729ad32b0a3049cc4'
 
 #: Stored in every angle cache. A cache with another (or no) version was
 #: computed with older definitions and is recomputed from its cached joints.
-ANGLE_DEFINITION_VERSION = 'smd-v4-2026-10-10-fixed-range'
+ANGLE_DEFINITION_VERSION = 'smd-v4-2026-10-10-fixed-range+targets-1'
 
 
 # =============================================================================
@@ -188,6 +188,12 @@ V4_NAMES = {
 
 ANGLE_CHANNELS = list(V4_NAMES)
 
+def _all_channels():
+    """Everything extract_all_joint_angles returns: the 26 angles plus the
+    continuous regression targets of core.targets (elevations, directions)."""
+    from core.targets import EXTRA_CHANNELS
+    return ANGLE_CHANNELS + EXTRA_CHANNELS
+
 #: Fixed range of every channel, in degrees (the v4 definitions guarantee it).
 #: Nothing is unwrapped, so no value ever leaves its range: shoulder and hip
 #: flexion span [-90, 270) so that an arm overhead reads ~175 without a jump,
@@ -237,13 +243,16 @@ def extract_all_joint_angles(joint_positions, fps=30.0, info=None):
             whether the clip was un-mirrored, interpolated frame counts).
 
     Returns:
-        angles: {channel: (T,) degrees}, NaN where no pose was detected
+        angles: {channel: (T,)}, NaN where no pose was detected. The 26 angles
+            in degrees, plus the regression targets of core.targets: limb
+            elevations (degrees) and limb direction components (unit vector).
         time: (T,) seconds, frame i at i / fps
     """
+    from core.targets import compute_target_channels
     joints = _body_joints(joint_positions)
     T = joints.shape[0]
     valid = np.isfinite(joints).all(axis=(1, 2))
-    angles = {name: np.full(T, np.nan) for name in ANGLE_CHANNELS}
+    angles = {name: np.full(T, np.nan) for name in _all_channels()}
 
     # The v4 maths cannot take NaN frames. Compute on the tracked frames only
     # (its interpolation then bridges the gaps) and leave the rest NaN.
@@ -254,6 +263,8 @@ def extract_all_joint_angles(joint_positions, fps=30.0, info=None):
         )
         for name, v4_name in V4_NAMES.items():
             angles[name][valid] = raw[v4_name]
+        for name, values in compute_target_channels(joints[valid]).items():
+            angles[name][valid] = values
 
     fps = float(fps) if fps else 30.0
     return angles, np.arange(T) / fps

@@ -92,7 +92,9 @@ class MainWindow(QMainWindow):
             'ground_truth': None,
             'metrics': None,          # pooled metrics dict
             'metrics_per_subject': None,  # {subject_id: metrics dict}
+            'predictions_per_subject': None,  # {subject_id: (truth, prediction)}
             'scaler': None,
+            'target_scaler': None,    # standardises the targets for training
             'config': None,
         }
 
@@ -297,7 +299,8 @@ class MainWindow(QMainWindow):
             self.state['selected_sensors'] = []
             self.state['alignment_method'] = 'upsample_sensor'
             for key in ('model', 'train_losses', 'predictions', 'ground_truth',
-                        'metrics', 'metrics_per_subject', 'scaler', 'config'):
+                        'metrics', 'metrics_per_subject', 'predictions_per_subject',
+                        'scaler', 'target_scaler', 'config'):
                 self.state[key] = None
 
             self.tabs.setCurrentIndex(0)

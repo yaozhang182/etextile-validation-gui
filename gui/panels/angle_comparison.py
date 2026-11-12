@@ -21,19 +21,14 @@ from gui.theme import set_style_property
 from gui import help as help_ui
 from gui.panels.video_scrubber import VideoScrubber
 
-# Angle grouping by body part
-ANGLE_GROUPS = {
-    'Pelvis': ['pelvis_flexion', 'pelvis_adduction', 'pelvis_rotation'],
-    'Lumbar': ['lumbar_extension', 'lumbar_bending', 'lumbar_rotation'],
-    'Hip L': ['left_hip_flexion', 'left_hip_abduction', 'left_hip_rotation'],
-    'Hip R': ['right_hip_flexion', 'right_hip_abduction', 'right_hip_rotation'],
-    'Knee': ['left_knee_flexion', 'right_knee_flexion'],
-    'Ankle': ['left_ankle_flexion', 'right_ankle_flexion'],
-    'Shoulder L': ['left_shoulder_flexion', 'left_shoulder_abduction', 'left_shoulder_rotation'],
-    'Shoulder R': ['right_shoulder_flexion', 'right_shoulder_abduction', 'right_shoulder_rotation'],
-    'Elbow': ['left_elbow_flexion', 'right_elbow_flexion'],
-    'Neck': ['neck_flexion', 'neck_bending'],
-}
+# Regression targets and display-only angles, grouped by body part. Shoulder
+# and hip flexion / abduction / rotation can be plotted but not trained on; see
+# core/targets.py for why.
+from core.targets import (  # noqa: E402
+    TARGET_GROUPS, DISPLAY_GROUPS, DISPLAY_ONLY_REASON, VECTOR_TARGETS,
+    COMPONENTS, is_vector,
+)
+ANGLE_GROUPS = TARGET_GROUPS
 
 
 def _pin_scroll_content(scroll):
@@ -180,7 +175,8 @@ class AngleComparisonPanel(QWidget):
     def __init__(self, state):
         super().__init__()
         self.state = state
-        self.angle_checkboxes = {}
+        self.angle_checkboxes = {}       # regression targets
+        self.display_checkboxes = {}     # plotted only, never trained on
         self.sensor_checkboxes = {}
         # What the cursor needs to read values off the current plot; filled by
         # _update_plot, used by _update_cursor.
@@ -210,7 +206,7 @@ class AngleComparisonPanel(QWidget):
         left_panel.addLayout(sh)
 
         # Joint angle checkboxes
-        angle_group = QGroupBox("Joint Angles (targets)")
+        angle_group = QGroupBox("Targets")
         angle_header = QVBoxLayout()
         angle_header.addWidget(help_ui.labelled(
             "What the model will predict", 'angle_targets'))
@@ -225,7 +221,7 @@ class AngleComparisonPanel(QWidget):
         angle_inner = QWidget()
         angle_layout = QVBoxLayout(angle_inner)
 
-        for group_name, angle_names in ANGLE_GROUPS.items():
+        for group_name, angle_names in TARGET_GROUPS.items():
             group_label = QLabel(f"<b>{group_name}</b>")
             angle_layout.addWidget(group_label)
             for name in angle_names:
@@ -233,6 +229,19 @@ class AngleComparisonPanel(QWidget):
                 cb.stateChanged.connect(self._on_selection_changed)
                 angle_layout.addWidget(cb)
                 self.angle_checkboxes[name] = cb
+
+        # Angles that describe the movement well but cannot be trained on.
+        display_label = QLabel("<b>Display only</b> (not used for training)")
+        display_label.setWordWrap(True)
+        display_label.setToolTip(DISPLAY_ONLY_REASON)
+        angle_layout.addWidget(display_label)
+        for group_name, angle_names in DISPLAY_GROUPS.items():
+            angle_layout.addWidget(QLabel(f"<i>{group_name}</i>"))
+            for name in angle_names:
+                cb = QCheckBox(name)
+                cb.stateChanged.connect(self._update_plot)
+                angle_layout.addWidget(cb)
+                self.display_checkboxes[name] = cb
 
         angle_layout.addStretch()
         angle_scroll.setWidget(angle_inner)
@@ -325,6 +334,8 @@ class AngleComparisonPanel(QWidget):
         self.fig = Figure(figsize=(10, 6))
         self.ax_angle = self.fig.add_subplot(211)
         self.ax_sensor = self.fig.add_subplot(212, sharex=self.ax_angle)
+        self.ax_dir = None
+        self._time_axes = [self.ax_angle, self.ax_sensor]
         self.canvas = FigureCanvas(self.fig)
         self.canvas.mpl_connect('button_press_event', self._on_plot_clicked)
         # The cursor is drawn by blitting: the plots are rendered once into a
@@ -405,7 +416,7 @@ class AngleComparisonPanel(QWidget):
             return
         if event.inaxes is self.ax_sensor and not c['aligned']:
             return      # the sensor panel is on its own clock; no frame there
-        if event.inaxes not in (self.ax_angle, self.ax_sensor):
+        if event.inaxes not in self._time_axes:
             return
         if self.canvas.toolbar is not None and getattr(self.canvas.toolbar, 'mode', ''):
             return      # zooming or panning, not picking a moment
@@ -432,7 +443,7 @@ class AngleComparisonPanel(QWidget):
 
     def reset(self):
         """Clear the selections that define the learning problem."""
-        for cb in self.angle_checkboxes.values():
+        for cb in list(self.angle_checkboxes.values()) + list(self.display_checkboxes.values()):
             cb.blockSignals(True)
             cb.setChecked(False)
             cb.blockSignals(False)
@@ -456,11 +467,17 @@ class AngleComparisonPanel(QWidget):
         report = tracking_report(subject.get('skeleton')) if subject else {'available': False}
         per_angle = report.get('per_angle', {}) if report.get('available') else {}
 
-        for name, cb in self.angle_checkboxes.items():
+        boxes = {**self.angle_checkboxes, **self.display_checkboxes}
+        for name, cb in boxes.items():
             summary = per_angle.get(name)
             notes = []
             if is_synthesised(name):
                 notes.append("synthesised pelvis/spine")
+            if name in self.display_checkboxes:
+                notes.append(DISPLAY_ONLY_REASON.rstrip('.'))
+            elif is_vector(name):
+                notes.append("unit vector in the chest (arm) or pelvis (leg) frame, "
+                             "components forward / up / outward")
 
             if summary is None:
                 cb.setText(name)
@@ -528,8 +545,9 @@ class AngleComparisonPanel(QWidget):
 
     def _select_shoulder_only(self):
         shoulder_names = set()
-        for g in ('Shoulder L', 'Shoulder R'):
-            shoulder_names.update(ANGLE_GROUPS[g])
+        for side in ('left', 'right'):
+            shoulder_names.update([f'{side}_shoulder_elevation',
+                                   f'{side}_upper_arm_direction'])
         for name, cb in self.angle_checkboxes.items():
             cb.setChecked(name in shoulder_names)
 
@@ -565,16 +583,29 @@ class AngleComparisonPanel(QWidget):
         if angle_time is None:
             angle_time = subject.get('time') if subject else None
 
-        self.ax_angle.clear()
-        self.ax_sensor.clear()
         self._cursor = None
         self._background = None
-        series_a, series_s = [], []      # (name, x, values) as plotted
+        series_a, series_s = [], []      # (label, x, values, colour, unit) as plotted
 
         sel_angles = [n for n, cb in self.angle_checkboxes.items() if cb.isChecked()]
+        shown = sel_angles + [n for n, cb in self.display_checkboxes.items() if cb.isChecked()]
         sel_sensors = [n for n, cb in self.sensor_checkboxes.items() if cb.isChecked()]
+        scalars = [n for n in shown if not is_vector(n)]
+        vectors = [n for n in shown if is_vector(n)]
 
-        has_angles = angles is not None and len(sel_angles) > 0
+        # Directions are unit vectors (-1..1) and would be flattened on a
+        # degree axis, so they get a panel of their own when selected.
+        self.fig.clf()
+        rows = [2, 1.4, 2] if vectors else [2, 2]
+        grid = self.fig.add_gridspec(len(rows), 1, height_ratios=rows)
+        self.ax_angle = self.fig.add_subplot(grid[0])
+        self.ax_dir = (self.fig.add_subplot(grid[1], sharex=self.ax_angle)
+                       if vectors else None)
+        self.ax_sensor = self.fig.add_subplot(grid[-1], sharex=self.ax_angle)
+        self._time_axes = [ax for ax in (self.ax_angle, self.ax_dir, self.ax_sensor)
+                           if ax is not None]
+
+        has_angles = angles is not None and len(shown) > 0
         has_sensors = sensor_df is not None and len(sel_sensors) > 0
 
         if not has_angles and not has_sensors:
@@ -585,19 +616,39 @@ class AngleComparisonPanel(QWidget):
             self.canvas.draw()
             return
 
-        # Top: Joint angles, on the session clock
+        def plot_channel(ax, key, label, style='-', color=None, unit='°'):
+            vals = np.asarray(angles[key], dtype=float)
+            t = angle_time
+            if t is None or len(t) != len(vals):
+                t = np.arange(len(vals))
+            valid = ~np.isnan(vals)
+            line, = ax.plot(t[valid], vals[valid], style, label=label,
+                            linewidth=1, color=color)
+            series_a.append((label, t, vals, line.get_color(), unit))
+            return line.get_color()
+
+        # Top: angles (degrees), on the session clock
         if has_angles:
-            for name in sel_angles:
+            for name in scalars:
                 if name in angles:
-                    vals = np.asarray(angles[name], dtype=float)
-                    t = angle_time
-                    if t is None or len(t) != len(vals):
-                        t = np.arange(len(vals))
-                    valid = ~np.isnan(vals)
-                    line, = self.ax_angle.plot(t[valid], vals[valid], label=name, linewidth=1)
-                    series_a.append((name, t, vals, line.get_color()))
-            self.ax_angle.legend(loc='upper right', fontsize=7)
-        self.ax_angle.set_ylabel("Joint Angle (deg)", fontsize=10)
+                    plot_channel(self.ax_angle, name, name)
+            if scalars:
+                self.ax_angle.legend(loc='upper right', fontsize=7)
+        self.ax_angle.set_ylabel("Angle (deg)", fontsize=10)
+
+        # Middle: limb directions, one colour per limb, one line style per axis
+        if self.ax_dir is not None and angles is not None:
+            styles = dict(zip(COMPONENTS, ('-', '--', ':')))
+            for name in vectors:
+                color = None
+                for comp, key in zip(COMPONENTS, VECTOR_TARGETS[name]):
+                    if key in angles:
+                        color = plot_channel(self.ax_dir, key, f"{name}.{comp}",
+                                             styles[comp], color, unit='')
+            self.ax_dir.set_ylim(-1.08, 1.08)
+            self.ax_dir.set_ylabel("Direction\n(unit vector)", fontsize=10)
+            self.ax_dir.legend(loc='upper right', fontsize=6, ncol=max(1, len(vectors)))
+            self.ax_dir.grid(True, alpha=0.3)
         title = f"{self._split.capitalize()} Data"
         if subject is not None:
             title += f" — {subject['id']}"
@@ -615,7 +666,7 @@ class AngleComparisonPanel(QWidget):
                                                 label=col, linewidth=1)
                     series_s.append((col, np.asarray(sensor_time, dtype=float),
                                      np.asarray(sensor_df[col].values, dtype=float),
-                                     line.get_color()))
+                                     line.get_color(), ''))
             self.ax_sensor.legend(loc='upper right', fontsize=7)
         self.ax_sensor.set_ylabel("Sensor Value", fontsize=10)
         self.ax_sensor.set_xlabel(
@@ -626,7 +677,7 @@ class AngleComparisonPanel(QWidget):
 
         n_ang = len(sel_angles)
         n_sen = len(sel_sensors)
-        info = f"Selected: {n_ang} angle(s), {n_sen} sensor(s)"
+        info = f"Selected: {n_ang} target(s), {n_sen} sensor(s)"
         warn = False
         if has_angles and has_sensors:
             if not aligned:
@@ -663,8 +714,9 @@ class AngleComparisonPanel(QWidget):
             'aligned': aligned,
             'angles': series_a,
             'sensors': series_s,
-            'lines': [self.ax_angle.axvline(t[0], color='#d32f2f', linewidth=1.2,
-                                            zorder=5, animated=True)],
+            'lines': [ax.axvline(t[0], color='#d32f2f', linewidth=1.2, zorder=5,
+                                 animated=True)
+                      for ax in self._time_axes if ax is not self.ax_sensor],
         }
         if aligned:
             self._cursor['lines'].append(self.ax_sensor.axvline(
@@ -692,7 +744,7 @@ class AngleComparisonPanel(QWidget):
         for artist in self._cursor_artists():
             self.fig.draw_artist(artist)
         # Repaint only the two plot areas, not the whole figure.
-        for ax in (self.ax_angle, self.ax_sensor):
+        for ax in self._time_axes:
             self.canvas.blit(ax.bbox)
 
     @staticmethod
@@ -723,12 +775,13 @@ class AngleComparisonPanel(QWidget):
             return "—" if v is None else f"{v:.1f}{unit}"
 
         parts = []
-        for name, x, vals, color in c['angles']:
+        for name, x, vals, color, unit in c['angles']:
             v = vals[frame] if frame < len(vals) and np.isfinite(vals[frame]) else None
-            parts.append((name, fmt(v, '°'), color))
-        for name, x, vals, color in c['sensors']:
+            parts.append((name, "—" if v is None else
+                          (f"{v:.1f}{unit}" if unit else f"{v:.2f}"), color))
+        for name, x, vals, color, unit in c['sensors']:
             v = self._value_at(x, vals, now) if c['aligned'] else None
-            parts.append((name, fmt(v, ''), color))
+            parts.append((name, fmt(v, unit), color))
         self.values_label.setText("&nbsp;&nbsp; ".join(
             f"<span style='color:{color};'>&#9632;</span>&nbsp;{name}&nbsp;<b>{value}</b>"
             for name, value, color in parts))

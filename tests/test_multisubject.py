@@ -350,7 +350,7 @@ def test_outdated_cache_is_recomputed_from_its_joints():
     w.tab_import._load_cached_angles(subject)
 
     assert subject['status'] == 'ready'
-    assert set(subject['angles']) == set(ANGLE_CHANNELS), "angles must be recomputed"
+    assert set(ANGLE_CHANNELS) <= set(subject['angles']), "angles must be recomputed"
     assert subject['angles']['right_shoulder_flexion'].shape == (120,)
     with np.load(angle_cache_path(video)) as data:
         assert str(data['__angle_version__'][0]) == ANGLE_DEFINITION_VERSION

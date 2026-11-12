@@ -110,6 +110,21 @@ ANGLE_JOINT_DEPENDENCIES = {
 
     'neck_flexion':             _SHOULDER_FRAME + [NECK, HEAD],
     'neck_bending':             _SHOULDER_FRAME + [NECK, HEAD],
+
+    # Regression targets of core.targets: a limb's direction (and elevation)
+    # in the chest or pelvis frame depends on that frame and the limb's ends.
+    'left_shoulder_elevation':  _SHOULDER_FRAME + [L_SHOULDER, L_ELBOW],
+    'right_shoulder_elevation': _SHOULDER_FRAME + [R_SHOULDER, R_ELBOW],
+    'left_upper_arm_direction': _SHOULDER_FRAME + [L_SHOULDER, L_ELBOW],
+    'right_upper_arm_direction': _SHOULDER_FRAME + [R_SHOULDER, R_ELBOW],
+    'left_forearm_direction':   _SHOULDER_FRAME + [L_ELBOW, L_WRIST],
+    'right_forearm_direction':  _SHOULDER_FRAME + [R_ELBOW, R_WRIST],
+    'left_hip_elevation':       _BODY_FRAME + [L_HIP, L_KNEE],
+    'right_hip_elevation':      _BODY_FRAME + [R_HIP, R_KNEE],
+    'left_thigh_direction':     _BODY_FRAME + [L_HIP, L_KNEE],
+    'right_thigh_direction':    _BODY_FRAME + [R_HIP, R_KNEE],
+    'left_shank_direction':     _BODY_FRAME + [L_KNEE, L_ANKLE],
+    'right_shank_direction':    _BODY_FRAME + [R_KNEE, R_ANKLE],
 }
 
 #: Confidence at or below this is surfaced as unreliable in the GUI.

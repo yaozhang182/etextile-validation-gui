@@ -15,8 +15,9 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QFileDialog, QGroupBox, QMessageBox,
-    QScrollArea,
+    QScrollArea, QComboBox, QSlider,
 )
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -81,6 +82,41 @@ class ResultsDashboardPanel(QWidget):
         pg.addWidget(self.canvas_pred)
         layout.addWidget(pred_group)
 
+        # --- Directions on the unit sphere ---
+        # A direction target is a point on a sphere; three component curves
+        # describe it, but the sphere shows where the limb pointed and how far
+        # the prediction was off at a glance.
+        self.sphere_group = QGroupBox("Directions in 3D")
+        sph = QVBoxLayout(self.sphere_group)
+        sph.addWidget(help_ui.labelled(
+            "Where the limb pointed (black) and where the model said it pointed (red)",
+            'direction_sphere'))
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Target:"))
+        self.sphere_target = QComboBox()
+        self.sphere_target.currentIndexChanged.connect(self._plot_sphere)
+        row.addWidget(self.sphere_target)
+        row.addWidget(QLabel("Test subject:"))
+        self.sphere_subject = QComboBox()
+        self.sphere_subject.currentIndexChanged.connect(self._on_sphere_subject)
+        row.addWidget(self.sphere_subject)
+        row.addStretch()
+        sph.addLayout(row)
+        self.fig_sphere = Figure(figsize=(6, 5))
+        self.canvas_sphere = FigureCanvas(self.fig_sphere)
+        self.canvas_sphere.setMinimumHeight(420)
+        sph.addWidget(self.canvas_sphere)
+        srow = QHBoxLayout()
+        srow.addWidget(QLabel("Sample:"))
+        self.sphere_slider = QSlider(Qt.Orientation.Horizontal)
+        self.sphere_slider.valueChanged.connect(self._plot_sphere)
+        srow.addWidget(self.sphere_slider, stretch=1)
+        self.sphere_label = QLabel("")
+        srow.addWidget(self.sphere_label)
+        sph.addLayout(srow)
+        self.sphere_group.setVisible(False)
+        layout.addWidget(self.sphere_group)
+
         # --- Sensor importance: a ten-bar chart, so kept modest ---
         importance_group = QGroupBox("Sensor Importance")
         ig = QVBoxLayout(importance_group)
@@ -136,6 +172,7 @@ class ResultsDashboardPanel(QWidget):
         self._fill_subject_table()
         self._fill_metrics_table(metrics)
         self._plot_predictions(metrics)
+        self._fill_sphere_controls()
         self._plot_sensor_importance()
 
     def reset(self):
@@ -145,8 +182,10 @@ class ResultsDashboardPanel(QWidget):
             table.clearContents()
             table.setRowCount(0)
         self.subject_group.setVisible(False)
+        self.sphere_group.setVisible(False)
         for figure, canvas in ((self.fig_importance, self.canvas_importance),
-                               (self.fig_pred, self.canvas_pred)):
+                               (self.fig_pred, self.canvas_pred),
+                               (self.fig_sphere, self.canvas_sphere)):
             figure.clf()
             canvas.draw()
         # clf() dropped the axes this attribute referred to
@@ -226,7 +265,15 @@ class ResultsDashboardPanel(QWidget):
                 0, 4, QTableWidgetItem(f"{np.mean(list(confidence.values())):.2f}")
             )
 
+        kinds = metrics.get('target_kinds', {})
         for i, j in enumerate(joint_names):
+            if kinds.get(j) == 'direction':
+                header = QTableWidgetItem(j)
+                header.setToolTip(
+                    "A direction target. Its error is the angle between the "
+                    "predicted and the true direction, in degrees; PCC is the "
+                    "mean over the three components.")
+                self.metrics_table.setVerticalHeaderItem(i + 1, header)
             self.metrics_table.setItem(i + 1, 0, QTableWidgetItem(f"{metrics['MPJAE_per_joint'][j]:.2f}"))
             self.metrics_table.setItem(i + 1, 1, QTableWidgetItem(f"{metrics['AMPE_per_joint'][j]:.1f}"))
             self.metrics_table.setItem(i + 1, 2, QTableWidgetItem(f"{metrics['RMSE_per_joint'][j]:.2f}"))
@@ -270,7 +317,17 @@ class ResultsDashboardPanel(QWidget):
         self.fig_importance.tight_layout()
         self.canvas_importance.draw()
 
+    def _target_names(self, metrics):
+        """Selected target names in model-output order (vectors take 3 columns)."""
+        config = self.state.get('config') or {}
+        names = config.get('target_names')
+        if names:
+            return list(names)
+        # Results from before vector targets: one column per joint name.
+        return [j.lower().replace(' ', '_') for j in metrics['MPJAE_per_joint']]
+
     def _plot_predictions(self, metrics):
+        from core.targets import target_slices, is_vector, display_name, COMPONENT_LABELS, COMPONENTS
         self.fig_pred.clear()
 
         preds = self.state.get('predictions')
@@ -278,24 +335,108 @@ class ResultsDashboardPanel(QWidget):
         if preds is None or gt is None:
             return
 
-        joint_names = list(metrics['MPJAE_per_joint'].keys())
-        n_joints = len(joint_names)
-        n_cols = min(n_joints, 3)
-        n_rows = (n_joints + n_cols - 1) // n_cols
+        layout = target_slices(self._target_names(metrics))
+        n = len(layout)
+        n_cols = min(n, 3)
+        n_rows = (n + n_cols - 1) // n_cols
+        colors = ('#1565c0', '#2e7d32', '#ef6c00')
 
-        for i, jname in enumerate(joint_names):
+        for i, (name, sl) in enumerate(layout):
             ax = self.fig_pred.add_subplot(n_rows, n_cols, i + 1)
-            ax.plot(gt[:, i], 'k-', linewidth=1.2, label='Ground Truth', alpha=0.8)
-            ax.plot(preds[:, i], 'r--', linewidth=1, label='Prediction', alpha=0.8)
-            mae = metrics['MPJAE_per_joint'][jname]
-            pcc = metrics['PCC_per_joint'][jname]
-            ax.set_title(f"{jname}\nMAE={mae:.1f} PCC={pcc:.2f}", fontsize=9)
+            label = display_name(name)
+            mae = metrics['MPJAE_per_joint'].get(label, np.nan)
+            pcc = metrics['PCC_per_joint'].get(label, np.nan)
+            if is_vector(name):
+                for k, comp in enumerate(COMPONENTS):
+                    col = sl.start + k
+                    ax.plot(gt[:, col], '-', color=colors[k], linewidth=1.1, alpha=0.8,
+                            label=f"{COMPONENT_LABELS[comp]} (truth)")
+                    ax.plot(preds[:, col], '--', color=colors[k], linewidth=1, alpha=0.9,
+                            label=f"{COMPONENT_LABELS[comp]} (pred.)")
+                ax.set_ylim(-1.08, 1.08)
+                ax.set_title(f"{label}\nangle error {mae:.1f}° · PCC={pcc:.2f}", fontsize=9)
+                ax.legend(fontsize=6, ncol=2, loc='lower right')
+            else:
+                ax.plot(gt[:, sl.start], 'k-', linewidth=1.2, label='Ground Truth', alpha=0.8)
+                ax.plot(preds[:, sl.start], 'r--', linewidth=1, label='Prediction', alpha=0.8)
+                ax.set_title(f"{label}\nMAE={mae:.1f}° · PCC={pcc:.2f}", fontsize=9)
+                if i == 0:
+                    ax.legend(fontsize=7)
             ax.grid(True, alpha=0.2)
-            if i == 0:
-                ax.legend(fontsize=7)
 
         self.fig_pred.tight_layout()
         self.canvas_pred.draw()
+
+    # --- unit sphere ----------------------------------------------------
+
+    def _fill_sphere_controls(self):
+        from core.targets import is_vector
+        metrics = self.state.get('metrics') or {}
+        names = [n for n in self._target_names(metrics) if is_vector(n)] if metrics else []
+        series = self.state.get('predictions_per_subject') or {}
+        self.sphere_group.setVisible(bool(names and series))
+        for combo, items in ((self.sphere_target, names), (self.sphere_subject, list(series))):
+            combo.blockSignals(True)
+            combo.clear()
+            combo.addItems(items)
+            combo.blockSignals(False)
+        self._on_sphere_subject()
+
+    def _on_sphere_subject(self):
+        series = self.state.get('predictions_per_subject') or {}
+        sid = self.sphere_subject.currentText()
+        n = len(series[sid][0]) if sid in series else 0
+        self.sphere_slider.blockSignals(True)
+        self.sphere_slider.setMaximum(max(n - 1, 0))
+        self.sphere_slider.setValue(min(self.sphere_slider.value(), max(n - 1, 0)))
+        self.sphere_slider.blockSignals(False)
+        self._plot_sphere()
+
+    def _plot_sphere(self):
+        """Truth and prediction of one direction target as paths on the unit sphere."""
+        from core.targets import target_slices, angle_between
+        self.fig_sphere.clear()
+        series = self.state.get('predictions_per_subject') or {}
+        name, sid = self.sphere_target.currentText(), self.sphere_subject.currentText()
+        if not name or sid not in series:
+            self.canvas_sphere.draw()
+            return
+        sl = dict(target_slices(self._target_names(self.state['metrics'])))[name]
+        truth, pred = series[sid][0][:, sl], series[sid][1][:, sl]
+        i = min(self.sphere_slider.value(), len(truth) - 1)
+
+        # Drawn as (forward, outward, up) so "up" is vertical on screen.
+        def xyz(v):
+            v = np.atleast_2d(v)
+            return v[:, 0], v[:, 2], v[:, 1]
+
+        ax = self.fig_sphere.add_subplot(111, projection='3d')
+        u, w = np.mgrid[0:2 * np.pi:24j, 0:np.pi:13j]
+        ax.plot_wireframe(np.cos(u) * np.sin(w), np.sin(u) * np.sin(w), np.cos(w),
+                          color='#b0bec5', linewidth=0.4, alpha=0.5)
+        ax.plot(*xyz(truth), color='black', linewidth=0.8, alpha=0.6, label='truth')
+        ax.plot(*xyz(pred), color='#d32f2f', linewidth=0.8, alpha=0.6, label='prediction')
+        for v, color in ((truth[i], 'black'), (pred[i], '#d32f2f')):
+            x, y, z = xyz(v)
+            ax.quiver(0, 0, 0, x[0], y[0], z[0], color=color, linewidth=2.2,
+                      arrow_length_ratio=0.12)
+        ax.set_xlabel('forward')
+        ax.set_ylabel('outward')
+        ax.set_zlabel('up')
+        for setter in (ax.set_xlim, ax.set_ylim, ax.set_zlim):
+            setter(-1, 1)
+        for ticks in (ax.set_xticks, ax.set_yticks, ax.set_zticks):
+            ticks([-1, 0, 1])
+        ax.set_box_aspect((1, 1, 1))
+        ax.view_init(elev=18, azim=-60)
+        ax.legend(loc='upper left', fontsize=8)
+        err = float(angle_between(truth[i:i + 1], pred[i:i + 1])[0])
+        mean_err = float(np.mean(angle_between(truth, pred)))
+        ax.set_title(f"{name} — {sid}", fontsize=10)
+        self.sphere_label.setText(
+            f"sample {i} of {len(truth) - 1}   ·   error here {err:.1f}°   ·   "
+            f"mean {mean_err:.1f}°")
+        self.canvas_sphere.draw()
 
     def _export_csv(self):
         metrics = self.state.get('metrics')
@@ -326,4 +467,6 @@ class ResultsDashboardPanel(QWidget):
         folder = Path(folder)
         self.fig_importance.savefig(folder / 'sensor_importance.png', dpi=150, bbox_inches='tight')
         self.fig_pred.savefig(folder / 'prediction_curves.png', dpi=150, bbox_inches='tight')
+        if self.sphere_group.isVisible():
+            self.fig_sphere.savefig(folder / 'directions_3d.png', dpi=150, bbox_inches='tight')
         QMessageBox.information(self, "Saved", f"Plots saved to {folder}")

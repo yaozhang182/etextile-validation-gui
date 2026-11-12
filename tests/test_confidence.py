@@ -48,7 +48,9 @@ def synthetic_visibility(T=400, seed=0):
 
 def test_every_gui_angle_has_a_dependency_map():
     """A channel with no map would silently show no confidence at all."""
-    gui_angles = {a for group in ANGLE_GROUPS.values() for a in group}
+    from core.targets import DISPLAY_GROUPS
+    gui_angles = {a for groups in (ANGLE_GROUPS, DISPLAY_GROUPS)
+                  for group in groups.values() for a in group}
     assert not gui_angles - set(ANGLE_JOINT_DEPENDENCIES), \
         f"unmapped: {gui_angles - set(ANGLE_JOINT_DEPENDENCIES)}"
     assert not set(ANGLE_JOINT_DEPENDENCIES) - gui_angles, \
@@ -145,13 +147,19 @@ def test_tab3_annotates_channels_with_confidence():
     assert boxes['lumbar_extension'].toolTip()
 
     good = boxes['right_elbow_flexion'].text()
-    poor = boxes['left_shoulder_rotation'].text()
+    poor = boxes['left_forearm_direction'].text()
     parse = lambda t: float(t.split('(')[1].rstrip(') '))
     assert parse(poor) < parse(good), (poor, good)
 
     w.state['selected_angles'] = []
     boxes['right_elbow_flexion'].setChecked(True)
     assert 'right_elbow_flexion' in w.state['selected_angles']
+
+    # Display-only angles are annotated too, but ticking one selects no target.
+    shown = w.tab_comparison.display_checkboxes['left_shoulder_rotation']
+    assert '(' in shown.text() and 'Display only' in shown.toolTip()
+    shown.setChecked(True)
+    assert 'left_shoulder_rotation' not in w.state['selected_angles']
 
 
 def test_low_confidence_channels_are_styled_as_a_warning():

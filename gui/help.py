@@ -74,14 +74,18 @@ HELP = {
     ),
     # ---------------------------------------------------------- Tab 3
     'angle_targets': (
-        "Joint angles (targets)",
+        "Targets",
         "What you tick here is what the model will try to predict from the "
-        "sensors. Start with two or three related channels rather than all 26 — "
-        "a focused model trains faster and is far easier to interpret.<br><br>"
-        "Pick angles the garment could plausibly sense: a sleeve cannot measure "
-        "knee flexion.<br><br><b>Click for what each channel means</b>, "
-        "including which direction counts as positive.",
-        "#joint-angle-definitions",
+        "sensors. Start with two or three related targets: a focused model "
+        "trains faster and is far easier to interpret.<br><br>"
+        "For an arm, try shoulder elevation (how far the arm is raised) and elbow "
+        "flexion, and add upper arm direction to tell a forward from a side raise. "
+        "A direction is a unit vector (forward, up, outward).<br><br>"
+        "Shoulder and hip flexion, abduction and rotation are listed under "
+        "<i>Display only</i>: they jump or are undefined in some poses, so they "
+        "can be plotted but not trained on.<br><br>"
+        "<b>Click for what each target means.</b>",
+        "#regression-targets",
     ),
     'angle_confidence': (
         "The number in brackets",
@@ -100,6 +104,16 @@ HELP = {
         "Use it to check a strange stretch of a curve against what the person was "
         "actually doing. A sensor shows — outside the time it recorded.",
         "#tab-3--angles--sensors",
+    ),
+    'direction_sphere': (
+        "Directions in 3D",
+        "A direction target is a point on a sphere around the joint: where the "
+        "upper arm, forearm, thigh or shank pointed, relative to the chest (arm) "
+        "or the pelvis (leg). Black is the ground truth from the video, red the "
+        "model's prediction. The arrows show one moment; move the slider to step "
+        "through the test recording.<br><br>The error of a frame is the angle "
+        "between the two arrows.",
+        "#tab-5--results",
     ),
     'sensor_inputs': (
         "Sensor channels (inputs)",

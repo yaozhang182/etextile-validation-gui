@@ -366,7 +366,7 @@ what the model predicts, and what it predicts from.
 | Control | What it does |
 |---|---|
 | **Data** / **Subject** | which session the plots show |
-| **Joint Angles (targets)** | the 26 angles the model can predict, grouped by body part — scroll the list to reach them all |
+| **Targets** | what the model can predict, grouped by body part — scroll the list to reach them all; the *Display only* angles at the bottom can be plotted but not trained on |
 | **All** / **None** / **Shoulder** | quick selection, under the angle list |
 | **Sensor Channels (inputs)** | which garment channels the model may use — one tickbox per channel, also scrollable |
 | **All** / **None** | quick selection, under the sensor list |
@@ -384,9 +384,13 @@ the garment is.
 Only channels present in **every** session appear. If a session has extra
 channels, a note says which are being ignored.
 
-**Choosing targets.** Pick joint angles the garment could plausibly sense — a
-sleeve cannot measure knee flexion. Start with two or three related channels
-rather than all 26; a focused model trains faster and is easier to interpret.
+**Choosing targets.** Pick what the garment could plausibly sense — a sleeve
+cannot measure knee flexion. Start with two or three related targets; a focused
+model trains faster and is easier to interpret. For an arm, a good start is
+**shoulder elevation** (how far the arm is raised, whichever direction),
+**elbow flexion**, and, if the garment should also tell a forward raise from a
+side raise, **upper arm direction**. See [regression targets](#regression-targets)
+for what each one measures and why shoulder flexion is not offered.
 
 **Reading the plots together** is the quickest way to see whether the garment
 works at all: if a sensor trace visibly follows the angle trace, the model will
@@ -516,7 +520,42 @@ Every channel that depends on the reconstructed joints is flagged in the
 **Tracking Quality** view, because those carry a geometric assumption on top of
 whatever the tracking confidence says.
 
-#### Changes in versions 0.2.4 and 0.2.5
+### Regression targets
+
+Not every joint angle makes a good thing to predict. Shoulder and hip flexion,
+abduction and rotation describe a movement well, but each has a pose where it is
+undefined and a point where its value jumps by 360° although the limb hardly
+moves (see above). A model trained on such a channel is punished by hundreds of
+degrees for a jump no sensor could follow. Those six channels per side, and the
+body heading (`pelvis_rotation`), are therefore listed under **Display only**:
+you can plot them, but not train on them.
+
+The **Targets** list offers quantities that are continuous in every pose:
+
+| Target | What it is | Range |
+|---|---|---|
+| `…_elbow_flexion`, `…_knee_flexion`, `…_ankle_flexion` | the hinge angles, as above | degrees |
+| trunk and neck angles | as above; normal movement never reaches their singular poses | degrees |
+| `left_shoulder_elevation` / `right_…`, `…_hip_elevation` | how far the upper arm (thigh) is raised from hanging straight down, in whatever direction | 0° hanging, 90° horizontal, 180° straight up |
+| `…_upper_arm_direction`, `…_forearm_direction` | where the segment points, as a unit vector in the chest's frame | three numbers, −1 to 1 |
+| `…_thigh_direction`, `…_shank_direction` | the same for the leg, in the pelvis's frame | three numbers, −1 to 1 |
+
+A direction has three components — **forward**, **up** and **outward** (away
+from the body's midline, so both sides read the same). Hanging straight down is
+(0, −1, 0); straight forward (1, 0, 0); out to the side (0, 0, 1). Upper arm plus
+forearm direction describe the whole arm, including the twist of the upper arm,
+and unlike shoulder rotation they stay defined with a straight elbow.
+
+Elevation and direction agree with the angles where those are defined:
+elevation = arccos(cos abduction · cos flexion). In a side raise, for example,
+elevation climbs smoothly from 0° to 180° while flexion steps from about 0° to
+180° as the arm passes horizontal.
+
+The error of a direction target is the **angle between the predicted and the
+true direction**, in degrees, so the error columns in Tab 5 read the same for
+every target.
+
+#### Changes in versions 0.2.4 to 0.2.6
 
 Version 0.2.4 replaced the angle computation with the SMD v4 definitions, and
 0.2.5 stopped unwrapping the twist channels so that every channel stays in its
@@ -528,6 +567,9 @@ whenever the elbow or knee was straight; and used opposite signs on the two
 sides for hip abduction and for hip and shoulder rotation. Angles cached by an
 older version are recomputed automatically from the cached skeleton the next
 time the session is added, so models trained before 0.2.5 should be retrained.
+Version 0.2.6 replaced shoulder and hip flexion, abduction and rotation as
+training targets by the elevation and direction targets above, and standardises
+every target before training so that angles and unit vectors weigh equally.
 
 ---
 
@@ -563,7 +605,7 @@ parts come from different places:
 | What | Where to change it |
 |---|---|
 | Which sessions are used | **Tab 1** — add or remove subjects in the Training / Test lists |
-| Which joint angles are predicted | **Tab 3** — the *Joint Angles (targets)* checkboxes |
+| Which targets are predicted | **Tab 3** — the *Targets* checkboxes |
 | Which sensor channels are used | **Tab 3** — the *Sensor Channels (inputs)* checkboxes |
 
 Changing any of them and pressing **Start Training** again trains a fresh model;
@@ -615,7 +657,8 @@ What each one is:
 | Headline | overall MPJAE, AMPE, RMSE, PCC |
 | **Per-Subject Results** | the same metrics for each test session separately (shown when there are several) |
 | **Metrics Summary** | per-joint metrics, plus the ground truth's tracking confidence |
-| **Prediction vs Ground Truth** | one panel per predicted channel: the true angle trace in black, the model's in red |
+| **Prediction vs Ground Truth** | one panel per target: the true trace in black, the model's in red; a direction shows its three components, true solid and predicted dashed |
+| **Directions in 3D** | for direction targets: where the limb pointed (black) and where the model said it pointed (red), drawn on a unit sphere; the slider steps through the test recording |
 | **Sensor Importance** | which channels the model relied on |
 | **Export Metrics CSV** | the metrics table as CSV |
 | **Export Report** | a text summary |
@@ -637,10 +680,10 @@ near-zero importance is not contributing and could be moved or removed.
 
 | Metric | Meaning | Better |
 |---|---|---|
-| **MPJAE** | mean absolute error, in degrees | lower |
-| **AMPE** | the same error as a percentage of the angle's range | lower |
+| **MPJAE** | mean absolute error, in degrees; for a direction, the mean angle between predicted and true direction | lower |
+| **AMPE** | the same error as a percentage of the target's range | lower |
 | **RMSE** | error in degrees, penalising large mistakes more | lower |
-| **PCC** | correlation between prediction and truth, −1 to 1 | closer to 1 |
+| **PCC** | correlation between prediction and truth, −1 to 1; for a direction, the mean over its three components | closer to 1 |
 | **Tracking conf.** | how well the *ground truth* for that channel was tracked, 0 to 1 | closer to 1 |
 
 The last column changes how to read the others. A large error on a channel with

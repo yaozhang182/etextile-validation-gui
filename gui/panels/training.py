@@ -280,15 +280,20 @@ class TrainingPanel(QWidget):
         # Drop results from any previous run, so a failed or test-less run can
         # never leave the dashboard showing stale numbers as if they were new.
         for key in ('model', 'train_losses', 'predictions', 'ground_truth',
-                    'metrics', 'metrics_per_subject'):
+                    'metrics', 'metrics_per_subject', 'predictions_per_subject',
+                    'target_scaler'):
             self.state[key] = None
         self._test_parts = []
 
         try:
+            from core.targets import expand_targets
             config = self._build_config()
+            # A direction target occupies three columns (its unit vector).
+            target_cols = expand_targets(sel_angles)
             num_targets = len(sel_angles)
             num_sensors = len(sel_sensors)
-            config['target_cols'] = sel_angles
+            config['target_names'] = sel_angles
+            config['target_cols'] = target_cols
             method = config['alignment_method']
             seq_len = config['sequence_length']
 
@@ -299,8 +304,8 @@ class TrainingPanel(QWidget):
 
             # --- Time-align each subject on the shared global clock ---
             self.log.append(f"Aligning data ({method})...")
-            train_parts = self._align_split('train', sel_angles, sel_sensors, method)
-            test_parts = self._align_split('test', sel_angles, sel_sensors, method)
+            train_parts = self._align_split('train', target_cols, sel_sensors, method)
+            test_parts = self._align_split('test', target_cols, sel_sensors, method)
 
             if not train_parts:
                 QMessageBox.warning(self, "No Usable Data",
@@ -312,12 +317,18 @@ class TrainingPanel(QWidget):
             # the same transform to test subjects.
             scaler = StandardScaler()
             scaler.fit(np.vstack([X for _, X, _, _ in train_parts]))
+            # Targets are standardised as well. Angles span tens of degrees and
+            # direction components lie in -1..1, so on raw values the loss
+            # would be all angles and the directions would hardly be learned.
+            target_scaler = StandardScaler()
+            target_scaler.fit(np.vstack([Y for _, _, Y, _ in train_parts]))
 
             # Window each subject separately, then concatenate. Windowing pooled
             # arrays would let a sequence straddle two subjects.
             train_sets, skipped = [], []
             for sid, X, Y, _ in train_parts:
-                ds = ShoulderDataset(scaler.transform(X), Y, seq_len)
+                ds = ShoulderDataset(scaler.transform(X), target_scaler.transform(Y),
+                                     seq_len)
                 if len(ds) < 1:
                     skipped.append(f"{sid} ({len(X)} samples < seq_len {seq_len})")
                     continue
@@ -346,7 +357,6 @@ class TrainingPanel(QWidget):
 
             # Create model
             from core.model import create_model
-            config['target_cols'] = sel_angles  # for len() in create_model
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
             model = create_model(config, num_sensors=num_sensors).to(device)
 
@@ -356,6 +366,7 @@ class TrainingPanel(QWidget):
             # Store for results tab
             self.state['config'] = config
             self.state['scaler'] = scaler
+            self.state['target_scaler'] = target_scaler
             self.state['alignment_method'] = method
             self._test_parts = [
                 (sid, scaler.transform(X), Y) for sid, X, Y, _ in test_parts
@@ -405,7 +416,7 @@ class TrainingPanel(QWidget):
         self.ax.clear()
         self.ax.plot(range(1, len(self._losses) + 1), self._losses, 'b-', linewidth=1.5)
         self.ax.set_xlabel("Epoch")
-        self.ax.set_ylabel("Loss (MSE)")
+        self.ax.set_ylabel("Loss (MSE, standardised)")
         self.ax.set_title("Training Loss")
         self.ax.grid(True, alpha=0.3)
         self.fig.tight_layout()
@@ -448,15 +459,16 @@ class TrainingPanel(QWidget):
             from torch.utils.data import DataLoader
             from core.data_alignment import ShoulderDataset
             from core.trainer import evaluate_model
-            from core.evaluator import calculate_metrics
+            from core.targets import evaluate_targets, postprocess
 
             config = self.state['config']
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
             seq_len = config['sequence_length']
-            sel_angles = self.state.get('selected_angles', [])
-            joint_names = [n.replace('_', ' ').title() for n in sel_angles]
+            sel_angles = config.get('target_names') or self.state.get('selected_angles', [])
+            target_scaler = self.state.get('target_scaler')
 
             per_subject, all_preds, all_gt = {}, [], []
+            per_subject_series = {}
 
             for sid, X, Y in self._test_parts:
                 test_ds = ShoulderDataset(X, Y, seq_len)
@@ -469,7 +481,11 @@ class TrainingPanel(QWidget):
                 test_loader = DataLoader(test_ds, batch_size=config['batch_size'] * 2,
                                          shuffle=False, num_workers=0)
                 preds, gt = evaluate_model(model, test_loader, device)
-                per_subject[sid] = calculate_metrics(gt, preds, joint_names)
+                if target_scaler is not None:
+                    preds = target_scaler.inverse_transform(preds)
+                preds = postprocess(preds, sel_angles)   # unit-length directions
+                per_subject[sid] = evaluate_targets(gt, preds, sel_angles)
+                per_subject_series[sid] = (gt, preds)
                 all_preds.append(preds)
                 all_gt.append(gt)
 
@@ -485,12 +501,13 @@ class TrainingPanel(QWidget):
 
             preds = np.concatenate(all_preds, axis=0)
             gt = np.concatenate(all_gt, axis=0)
-            metrics = calculate_metrics(gt, preds, joint_names)
+            metrics = evaluate_targets(gt, preds, sel_angles)
 
             self.state['predictions'] = preds
             self.state['ground_truth'] = gt
             self.state['metrics'] = metrics
             self.state['metrics_per_subject'] = per_subject
+            self.state['predictions_per_subject'] = per_subject_series
 
             self.log.append(
                 f"Pooled over {len(per_subject)} subject(s): "
