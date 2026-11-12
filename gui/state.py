@@ -30,6 +30,9 @@ def make_subject(subject_id, video_path, sensor_path, video_csv_path):
         'time': None,       # (T,) seconds, relative to video start
         'status': 'pending',  # pending | extracting | ready | error
         'error': None,
+        # Video frame last shown in Tab 2 or Tab 3, so both open at the same
+        # moment of the recording.
+        'view_frame': 0,
     }
 
 

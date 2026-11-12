@@ -370,6 +370,9 @@ what the model predicts, and what it predicts from.
 | **All** / **None** / **Shoulder** | quick selection, under the angle list |
 | **Sensor Channels (inputs)** | which garment channels the model may use — one tickbox per channel, also scrollable |
 | **All** / **None** | quick selection, under the sensor list |
+| **Show video** | show or hide the video above the plots |
+| **Play** / video slider | play or scrub the recording; a red line marks that instant in both plots |
+| Line above the video | every selected channel's value at the red line, coloured like its curve |
 | Upper plot | the selected joint angles over time |
 | Lower plot | the selected sensor channels, on the same time axis |
 
@@ -395,6 +398,15 @@ instant, and you can compare the panels by eye. The video and the sensor logger
 are rarely started at the same moment, so one trace usually begins later than
 the other. The line under the plots gives the window both streams cover; only
 that window can be used for training.
+
+**Checking a curve against the video.** Drag the video slider or press Play, and
+the red line moves across both plots while the line above the video shows each
+channel's value at that instant. Click anywhere in a plot to jump the video to
+that moment. When a curve does something unexpected, this is the quickest way to
+see whether the person really moved that way or the pose tracker lost the limb.
+The frame you stop at is shared with the Skeleton Viewer, so you can switch to
+Tab 2 to see the reconstructed skeleton at the same moment. A sensor channel
+shows — where the sensor was not recording.
 
 ### Joint angle definitions
 
@@ -426,6 +438,16 @@ Shoulder and hip flexion run from −90 to 270, so an arm raised overhead reads
 about 175 and never jumps to −185. When the arm or leg points straight out to
 the side, flexion has no defined value; those frames are filled in by
 interpolation from the frames around them.
+
+**Shoulder flexion is the wrong channel for a side raise.** Flexion measures how
+far the arm is raised in the forward–backward plane. When the arm is lifted
+sideways it barely moves in that plane, so flexion is either undefined or decided
+by how far in front of or behind the body the arm is, which a single camera
+estimates poorly: it tends to place a sideways arm somewhat behind the body.
+An arm held out to the side and estimated a little behind the body then sits
+where flexion runs out of range, and the value flips between about −90 and 270
+although the arm hardly moves. Use the **abduction** channel for side raises; it
+reads about −80 to −90 with the arm horizontal.
 
 **Twists** — pelvis rotation, lumbar rotation, shoulder and hip rotation — lie
 between −180 and 180.

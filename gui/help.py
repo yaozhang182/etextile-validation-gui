@@ -92,6 +92,15 @@ HELP = {
         "was poorly tracked will score badly however good the garment is.",
         "#tab-3--angles--sensors",
     ),
+    'angle_cursor': (
+        "Video and cursor",
+        "Play or drag the video: the red line marks that instant in both plots, "
+        "and each legend entry shows the channel's value there. Click anywhere in "
+        "a plot to jump the video to that moment.<br><br>"
+        "Use it to check a strange stretch of a curve against what the person was "
+        "actually doing. A sensor shows — outside the time it recorded.",
+        "#tab-3--angles--sensors",
+    ),
     'sensor_inputs': (
         "Sensor channels (inputs)",
         "The garment channels the model is allowed to use. Leave them all ticked "

@@ -22,6 +22,8 @@ external/BodyPoseEstimation/
 paper/
 paper_template/
 project_plan/
+# Recordings shared by other users for checking; their data, not ours to publish.
+other_user_data/
 
 # Python
 __pycache__/

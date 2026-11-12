@@ -19,6 +19,7 @@ from gui.state import (
 )
 from gui.theme import set_style_property
 from gui import help as help_ui
+from gui.panels.video_scrubber import VideoScrubber
 
 # Angle grouping by body part
 ANGLE_GROUPS = {
@@ -181,6 +182,9 @@ class AngleComparisonPanel(QWidget):
         self.state = state
         self.angle_checkboxes = {}
         self.sensor_checkboxes = {}
+        # What the cursor needs to read values off the current plot; filled by
+        # _update_plot, used by _update_cursor.
+        self._cursor = None
         self._init_ui()
 
     def _init_ui(self):
@@ -294,11 +298,41 @@ class AngleComparisonPanel(QWidget):
         # --- Right: Plot area ---
         right_panel = QVBoxLayout()
 
+        # Video with a cursor: scrubbing the video moves a vertical line across
+        # both plots and shows every selected channel's value at that instant;
+        # clicking a plot jumps the video there. That is how a suspicious stretch
+        # of a curve gets checked against what the person was actually doing.
+        vrow = QHBoxLayout()
+        self.video_toggle = QCheckBox("Show video")
+        self.video_toggle.setChecked(True)
+        self.video_toggle.toggled.connect(self._on_video_toggled)
+        vrow.addWidget(self.video_toggle)
+        help_ui.attach(vrow, 'angle_cursor')
+        self.cursor_label = QLabel("")
+        vrow.addWidget(self.cursor_label, stretch=1)
+        right_panel.addLayout(vrow)
+        # Values at the cursor, coloured like their curves. Kept out of the
+        # matplotlib legends on purpose: redrawing a legend costs ~18 ms, which
+        # alone would make playback stutter.
+        self.values_label = QLabel("")
+        self.values_label.setWordWrap(True)
+        self.values_label.setTextFormat(Qt.TextFormat.RichText)
+        right_panel.addWidget(self.values_label)
+        self.scrubber = VideoScrubber(video_height=200)
+        self.scrubber.frameChanged.connect(self._on_frame_changed)
+        right_panel.addWidget(self.scrubber)
+
         self.fig = Figure(figsize=(10, 6))
         self.ax_angle = self.fig.add_subplot(211)
         self.ax_sensor = self.fig.add_subplot(212, sharex=self.ax_angle)
         self.canvas = FigureCanvas(self.fig)
-        right_panel.addWidget(self.canvas)
+        self.canvas.mpl_connect('button_press_event', self._on_plot_clicked)
+        # The cursor is drawn by blitting: the plots are rendered once into a
+        # cached background and only the lines and legends are redrawn per
+        # frame. A full redraw takes ~100 ms, too slow to follow playback.
+        self._background = None
+        self.canvas.mpl_connect('draw_event', self._on_draw)
+        right_panel.addWidget(self.canvas, stretch=1)
 
         self.info_label = QLabel("Select angles and sensors, then view the overlay plot.")
         right_panel.addWidget(self.info_label)
@@ -312,6 +346,13 @@ class AngleComparisonPanel(QWidget):
         super().showEvent(event)
         _pin_scroll_content(self.angle_scroll)
         _pin_scroll_content(self.sensor_scroll)
+
+    def hideEvent(self, event):
+        """Leaving the tab pauses the video; it would otherwise play unseen."""
+        scrubber = getattr(self, 'scrubber', None)   # hidden once while being built
+        if scrubber is not None:
+            scrubber.stop()
+        super().hideEvent(event)
 
     @property
     def _split(self):
@@ -331,7 +372,48 @@ class AngleComparisonPanel(QWidget):
 
     def _on_subject_changed(self):
         self._annotate_angle_confidence()
+        self._load_video()
         self._update_plot()
+
+    def _load_video(self):
+        """Point the player at the current subject, at the frame last viewed."""
+        subject = self._current_subject()
+        angles = subject.get('angles') if subject else None
+        if not angles or not subject.get('video_path'):
+            self.scrubber.clear()
+            return
+        n = len(next(iter(angles.values())))
+        skeleton = subject.get('skeleton') or {}
+        self.scrubber.set_source(subject['video_path'], n, skeleton.get('fps') or 30.0,
+                                 frame=subject.get('view_frame', 0))
+
+    def _on_video_toggled(self, shown):
+        self.scrubber.video_label.setVisible(shown)
+        if not shown:
+            self.scrubber.stop()
+
+    def _on_frame_changed(self, frame):
+        subject = self._current_subject()
+        if subject is not None:
+            subject['view_frame'] = int(frame)
+        self._update_cursor(frame)
+
+    def _on_plot_clicked(self, event):
+        """Jump the video to the instant clicked in either plot."""
+        c = self._cursor
+        if c is None or event.xdata is None or event.button != 1:
+            return
+        if event.inaxes is self.ax_sensor and not c['aligned']:
+            return      # the sensor panel is on its own clock; no frame there
+        if event.inaxes not in (self.ax_angle, self.ax_sensor):
+            return
+        if self.canvas.toolbar is not None and getattr(self.canvas.toolbar, 'mode', ''):
+            return      # zooming or panning, not picking a moment
+        t = c['angle_t']
+        frame = int(np.clip(np.searchsorted(t, event.xdata), 0, len(t) - 1))
+        if frame > 0 and abs(t[frame - 1] - event.xdata) < abs(t[frame] - event.xdata):
+            frame -= 1
+        self.scrubber.set_frame(frame)
 
     def _populate_subjects(self):
         subjects = get_subjects(self.state, self._split)
@@ -345,6 +427,7 @@ class AngleComparisonPanel(QWidget):
         self._populate_subjects()
         self._rebuild_sensor_checkboxes()
         self._annotate_angle_confidence()
+        self._load_video()
         self._update_plot()
 
     def reset(self):
@@ -355,6 +438,7 @@ class AngleComparisonPanel(QWidget):
             cb.blockSignals(False)
         self.state['selected_angles'] = []
         self.state['selected_sensors'] = []
+        self.scrubber.clear()
         self.refresh()
 
     def _annotate_angle_confidence(self):
@@ -483,6 +567,9 @@ class AngleComparisonPanel(QWidget):
 
         self.ax_angle.clear()
         self.ax_sensor.clear()
+        self._cursor = None
+        self._background = None
+        series_a, series_s = [], []      # (name, x, values) as plotted
 
         sel_angles = [n for n, cb in self.angle_checkboxes.items() if cb.isChecked()]
         sel_sensors = [n for n, cb in self.sensor_checkboxes.items() if cb.isChecked()]
@@ -493,6 +580,8 @@ class AngleComparisonPanel(QWidget):
         if not has_angles and not has_sensors:
             self.ax_angle.text(0.5, 0.5, "Select angles and/or sensors to plot",
                         transform=self.ax_angle.transAxes, ha='center', va='center', fontsize=14)
+            self.cursor_label.setText("")
+            self.values_label.setText("")
             self.canvas.draw()
             return
 
@@ -505,7 +594,8 @@ class AngleComparisonPanel(QWidget):
                     if t is None or len(t) != len(vals):
                         t = np.arange(len(vals))
                     valid = ~np.isnan(vals)
-                    self.ax_angle.plot(t[valid], vals[valid], label=name, linewidth=1)
+                    line, = self.ax_angle.plot(t[valid], vals[valid], label=name, linewidth=1)
+                    series_a.append((name, t, vals, line.get_color()))
             self.ax_angle.legend(loc='upper right', fontsize=7)
         self.ax_angle.set_ylabel("Joint Angle (deg)", fontsize=10)
         title = f"{self._split.capitalize()} Data"
@@ -521,8 +611,11 @@ class AngleComparisonPanel(QWidget):
 
             for col in sel_sensors:
                 if col in sensor_df.columns:
-                    self.ax_sensor.plot(sensor_time, sensor_df[col].values,
-                                       label=col, linewidth=1)
+                    line, = self.ax_sensor.plot(sensor_time, sensor_df[col].values,
+                                                label=col, linewidth=1)
+                    series_s.append((col, np.asarray(sensor_time, dtype=float),
+                                     np.asarray(sensor_df[col].values, dtype=float),
+                                     line.get_color()))
             self.ax_sensor.legend(loc='upper right', fontsize=7)
         self.ax_sensor.set_ylabel("Sensor Value", fontsize=10)
         self.ax_sensor.set_xlabel(
@@ -553,4 +646,93 @@ class AngleComparisonPanel(QWidget):
         self.info_label.setText(info)
 
         self.fig.tight_layout()
+        self._install_cursor(subject, angle_time, aligned, series_a, series_s)
         self.canvas.draw()
+
+    def _install_cursor(self, subject, angle_time, aligned, series_a, series_s):
+        """Add the vertical cursor lines and remember how to read values off."""
+        angles = subject.get('angles') if subject else None
+        if not angles:
+            return
+        n = len(next(iter(angles.values())))
+        t = angle_time
+        if t is None or len(t) != n:
+            t = np.arange(n, dtype=float)    # same fallback as the angle plot
+        self._cursor = {
+            'angle_t': np.asarray(t, dtype=float),
+            'aligned': aligned,
+            'angles': series_a,
+            'sensors': series_s,
+            'lines': [self.ax_angle.axvline(t[0], color='#d32f2f', linewidth=1.2,
+                                            zorder=5, animated=True)],
+        }
+        if aligned:
+            self._cursor['lines'].append(self.ax_sensor.axvline(
+                t[0], color='#d32f2f', linewidth=1.2, zorder=5, animated=True))
+        self._background = None
+        self._update_cursor(self.scrubber.frame(), draw=False)
+
+    def _cursor_artists(self):
+        c = self._cursor
+        if c is None:
+            return []
+        return c['lines']
+
+    def _on_draw(self, event):
+        """After a full redraw: cache the plots without the cursor, then add it."""
+        self._background = self.canvas.copy_from_bbox(self.fig.bbox)
+        for artist in self._cursor_artists():
+            self.fig.draw_artist(artist)
+
+    def _blit(self):
+        if self._background is None:
+            self.canvas.draw_idle()       # _on_draw will cache and draw the cursor
+            return
+        self.canvas.restore_region(self._background)
+        for artist in self._cursor_artists():
+            self.fig.draw_artist(artist)
+        # Repaint only the two plot areas, not the whole figure.
+        for ax in (self.ax_angle, self.ax_sensor):
+            self.canvas.blit(ax.bbox)
+
+    @staticmethod
+    def _value_at(x, values, at):
+        """Linear interpolation inside the series, None outside it or on NaN."""
+        if len(x) == 0 or at < x[0] or at > x[-1]:
+            return None
+        ok = np.isfinite(values)
+        if not ok.any():
+            return None
+        v = float(np.interp(at, x[ok], values[ok]))
+        return v
+
+    def _update_cursor(self, frame, draw=True):
+        """Move the cursor to a video frame and show each channel's value there."""
+        c = self._cursor
+        if c is None:
+            self.cursor_label.setText("")
+            self.values_label.setText("")
+            return
+        t = c['angle_t']
+        frame = int(np.clip(frame, 0, len(t) - 1))
+        now = t[frame]
+        for line in c['lines']:
+            line.set_xdata([now, now])
+
+        def fmt(v, unit):
+            return "—" if v is None else f"{v:.1f}{unit}"
+
+        parts = []
+        for name, x, vals, color in c['angles']:
+            v = vals[frame] if frame < len(vals) and np.isfinite(vals[frame]) else None
+            parts.append((name, fmt(v, '°'), color))
+        for name, x, vals, color in c['sensors']:
+            v = self._value_at(x, vals, now) if c['aligned'] else None
+            parts.append((name, fmt(v, ''), color))
+        self.values_label.setText("&nbsp;&nbsp; ".join(
+            f"<span style='color:{color};'>&#9632;</span>&nbsp;{name}&nbsp;<b>{value}</b>"
+            for name, value, color in parts))
+
+        self.cursor_label.setText(f"Frame {frame}   ·   t = {now:.2f} s")
+        if draw:
+            self._blit()

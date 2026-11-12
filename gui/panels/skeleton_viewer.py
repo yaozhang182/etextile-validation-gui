@@ -125,7 +125,11 @@ class SkeletonViewerPanel(QWidget):
         subject = self._current_subject()
         if subject is not None and subject.get('skeleton') is not None:
             self.frame_slider.setMaximum(max(subject['skeleton']['total_frames'] - 1, 0))
-        self.frame_slider.setValue(0)
+        # Open at the frame last viewed here or in Tab 3.
+        frame = subject.get('view_frame', 0) if subject is not None else 0
+        self.frame_slider.blockSignals(True)
+        self.frame_slider.setValue(min(int(frame), self.frame_slider.maximum()))
+        self.frame_slider.blockSignals(False)
         self._update_plot()
 
     def _populate_subjects(self):
@@ -317,6 +321,7 @@ class SkeletonViewerPanel(QWidget):
             return
 
         frame_idx = self.frame_slider.value()
+        subject['view_frame'] = int(frame_idx)
         total = skeleton.get('total_frames', 0)
         self.frame_label.setText(f"Frame: {frame_idx} / {total}")
 
