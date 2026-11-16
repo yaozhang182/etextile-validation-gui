@@ -188,16 +188,26 @@ def postprocess(pred, names):
 
 # --- computation ----------------------------------------------------------
 
-def _v4_frames(joints):
+def _v4_frames(joints, return_mirror=False):
     """
     The pelvis and chest frames exactly as the SMD v4 calculator builds them
     (compute_all_joint_angles with every fix on), in its axes: X forward,
     Y up, Z the person's right. Returns (ric, pelvis_frame, chest_frame); frame
     rows are the axes, so frame @ v gives v's coordinates.
+
+    With return_mirror, also returns the unit normal of the plane a mirrored
+    skeleton was reflected in to un-mirror it (None if it was not mirrored);
+    reflecting in it again maps calculator-axis vectors back to the input.
     """
     ric = joints[:, :, [2, 1, 0]].copy()      # "humanml3d" -> calculator axes
     ric[:, :, 2] *= -1
+    mirror = None
     if _v4.chirality_score(ric) < _v4.CHIRALITY_THR:
+        bc = _v4.compute_body_coordinate(ric[:, 2], ric[:, 1], ric[:, 17],
+                                         ric[:, 16], ric[:, 0])
+        mirror = bc[0, 0].copy()
+        mirror[1] = 0.0
+        mirror /= np.linalg.norm(mirror) + 1e-12
         ric = _v4.unmirror_keep_heading(ric)
     pelvis = _v4.compute_body_coordinate(ric[:, 2], ric[:, 1], ric[:, 17],
                                          ric[:, 16], ric[:, 0])
@@ -208,6 +218,8 @@ def _v4_frames(joints):
                                           ric[:, 12], ric[:, 17], pelvis)
     twist = _v4.lumbar_rotation_collar(neck, ric[:, 13], ric[:, 14])
     chest = _v4.compute_shoulder_coordinate(pelvis, ext, bend, twist, neck)
+    if return_mirror:
+        return ric, pelvis, chest, mirror
     return ric, pelvis, chest
 
 

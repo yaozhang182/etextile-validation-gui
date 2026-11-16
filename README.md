@@ -16,8 +16,8 @@ webcam recording and your garment's sensor CSV; it derives joint-angle ground
 truth from the video, trains a sensor-to-angle regression model, and reports
 per-joint accuracy — no motion-capture lab, no programming.
 
-Five tabs, left to right: **Data Import → Skeleton Viewer → Angles & Sensors →
-Training → Performance Dashboard**.
+Six tabs, left to right: **Data Import → Skeleton Viewer → Angles & Sensors →
+Training → Pose Comparison → Results**.
 
 📘 **[Read the user manual](docs/manual.md)** — input format, every tab and
 control explained, with screenshots and troubleshooting. Also reachable from
@@ -108,10 +108,13 @@ inside for details. A reasonable first run:
 3. Tab 2 → scrub the timeline and confirm the skeleton follows the body. Joints
    are coloured by tracking confidence; **Tracking Quality** summarises which
    channels to distrust.
-4. Tab 3 → tick the joint angles to predict and the sensor channels to use. Each
-   angle shows its tracking confidence; low ones are flagged red.
+4. Tab 3 → click the bones to predict on the body outline (or tick targets by
+   name in the List view) and choose the sensor channels to use. Each target
+   shows its tracking confidence; low ones are flagged red.
 5. Tab 4 → **Start Training** (defaults are fine).
-6. Tab 5 → per-joint MPJAE / AMPE / RMSE / PCC, predicted-vs-ground-truth
+6. Tab 5 → the test video next to the tracked skeleton and the skeleton with
+   the predicted bones redrawn, on one slider.
+7. Tab 6 → per-target MPJAE / AMPE / RMSE / PCC, predicted-vs-ground-truth
    curves, and sensor importance.
 
 ## Command line

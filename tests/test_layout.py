@@ -69,6 +69,14 @@ def test_angle_list_is_visible_at_every_window_size():
         for n in CHANNEL_COUNTS:
             w = _window(n, size)
             panel = w.tab_comparison
+            # the skeleton view is the default; it must be usable too
+            assert panel.bone_picker.height() >= 140, \
+                f"bone picker only {panel.bone_picker.height()}px at {size}/{n}ch"
+            # and not taller than the space it is shown in, or its legs are cut off
+            assert panel.bone_picker.height() <= panel.target_stack.height(), \
+                (size, n, panel.bone_picker.height(), panel.target_stack.height())
+            panel.view_buttons.button(1).click()
+            _app.processEvents()
             h = panel.angle_scroll.viewport().height()
             assert h >= 150, \
                 f"angle list viewport only {h}px at {size} with {n} channels"

@@ -369,7 +369,7 @@ class TrainingPanel(QWidget):
             self.state['target_scaler'] = target_scaler
             self.state['alignment_method'] = method
             self._test_parts = [
-                (sid, scaler.transform(X), Y) for sid, X, Y, _ in test_parts
+                (sid, scaler.transform(X), Y, t) for sid, X, Y, t in test_parts
             ]
             self._losses = []
 
@@ -452,6 +452,29 @@ class TrainingPanel(QWidget):
             self.progress_label.setText("Training complete. No test data.")
         self._close_dialog()
 
+    def _frames_of(self, subject_id, times):
+        """
+        The video frame each prediction belongs to (-1 where none is close),
+        found by timestamp: rows dropped for untracked frames make the row
+        index useless for this.
+        """
+        from gui.panels.angle_comparison import _frame_epochs
+        subject = next((s for s in ready_subjects(self.state, 'test')
+                        if s['id'] == subject_id), None)
+        frames = np.full(len(times), -1, dtype=int)
+        if subject is None or not subject.get('angles') or len(times) == 0:
+            return frames
+        n = len(next(iter(subject['angles'].values())))
+        epochs = _frame_epochs(subject['video_df'], n)
+        if epochs is None or n < 2:
+            return frames
+        k = np.clip(np.searchsorted(epochs, times), 1, n - 1)
+        k = np.where(np.abs(epochs[k - 1] - times) < np.abs(epochs[k] - times), k - 1, k)
+        period = float(np.median(np.diff(epochs)))
+        close = np.abs(epochs[k] - times) <= max(period, 1e-6)
+        frames[close] = k[close]
+        return frames
+
     def _run_evaluation(self, model):
         """Evaluate each test subject separately, then pool for global metrics."""
         try:
@@ -470,7 +493,7 @@ class TrainingPanel(QWidget):
             per_subject, all_preds, all_gt = {}, [], []
             per_subject_series = {}
 
-            for sid, X, Y in self._test_parts:
+            for sid, X, Y, t in self._test_parts:
                 test_ds = ShoulderDataset(X, Y, seq_len)
                 if len(test_ds) < 1:
                     self.log.append(
@@ -485,7 +508,12 @@ class TrainingPanel(QWidget):
                     preds = target_scaler.inverse_transform(preds)
                 preds = postprocess(preds, sel_angles)   # unit-length directions
                 per_subject[sid] = evaluate_targets(gt, preds, sel_angles)
-                per_subject_series[sid] = (gt, preds)
+                # sample i of the dataset is the window ending at row i+seq_len-1
+                times = t[seq_len - 1: seq_len - 1 + len(preds)]
+                per_subject_series[sid] = {
+                    'truth': gt, 'pred': preds, 'times': times,
+                    'frames': self._frames_of(sid, times),
+                }
                 all_preds.append(preds)
                 all_gt.append(gt)
 
@@ -514,7 +542,8 @@ class TrainingPanel(QWidget):
                 f"MPJAE={metrics['Global_MPJAE']:.2f} deg, PCC={metrics['Global_PCC']:.3f}"
             )
             self.progress_label.setText(
-                f"Done! MPJAE={metrics['Global_MPJAE']:.2f} deg — Switch to Tab 5 for details."
+                f"Done! MPJAE={metrics['Global_MPJAE']:.2f} deg — see Tab 5 (Pose) and "
+                f"Tab 6 (Results)."
             )
 
         except Exception as e:

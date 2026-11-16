@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox,
-    QCheckBox, QScrollArea, QComboBox, QPushButton,
+    QCheckBox, QScrollArea, QComboBox, QPushButton, QButtonGroup, QStackedWidget,
 )
 from PyQt6.QtCore import Qt
 
@@ -20,6 +20,8 @@ from gui.state import (
 from gui.theme import set_style_property
 from gui import help as help_ui
 from gui.panels.video_scrubber import VideoScrubber
+from gui.panels.bone_picker import BonePicker
+from core.bones import BONES, bone_targets, selection_state
 
 # Regression targets and display-only angles, grouped by body part. Shoulder
 # and hip flexion / abduction / rotation, the pelvis angles and lumbar
@@ -211,14 +213,12 @@ class AngleComparisonPanel(QWidget):
         angle_header = QVBoxLayout()
         angle_header.addWidget(help_ui.labelled(
             "What the model will predict", 'angle_targets'))
-        angle_header.addWidget(help_ui.labelled(
-            "(0.00) = tracking confidence", 'angle_confidence'))
         angle_scroll = self.angle_scroll = QScrollArea()
         angle_scroll.setWidgetResizable(True)
         # A QScrollArea's minimum size hint is tiny, so in a cramped column it is
         # the first thing Qt shrinks — down to nothing, leaving only its
         # scrollbar and no way to pick a target. Give it a floor.
-        angle_scroll.setMinimumHeight(200)
+        angle_scroll.setMinimumHeight(170)
         angle_inner = QWidget()
         angle_layout = QVBoxLayout(angle_inner)
 
@@ -247,9 +247,42 @@ class AngleComparisonPanel(QWidget):
         angle_layout.addStretch()
         angle_scroll.setWidget(angle_inner)
         _pin_scroll_content(angle_scroll)
+        # Two ways to pick: click bones on a body outline, or tick names in
+        # the full list. Both edit the same checkboxes.
+        view_row = QHBoxLayout()
+        view_row.setSpacing(0)
+        self.view_buttons = QButtonGroup(self)
+        self.view_buttons.setExclusive(True)
+        for k, (text, tip) in enumerate((
+                ("Skeleton", "Click the bones to predict"),
+                ("List", "Every target by name, and the display-only angles"))):
+            b = QPushButton(text)
+            b.setCheckable(True)
+            b.setToolTip(tip)
+            b.setProperty("segment", True)
+            self.view_buttons.addButton(b, k)
+            view_row.addWidget(b)
+        self.view_buttons.button(0).setChecked(True)
+        self.view_buttons.idClicked.connect(self._on_view_changed)
+        help_ui.attach(view_row, 'bone_picker')
+
+        self.bone_picker = BonePicker()
+        self.bone_picker.boneClicked.connect(self._on_bone_clicked)
+        self.target_stack = QStackedWidget()
+        self.target_stack.addWidget(self.bone_picker)
+        # the numbers in brackets only appear in the list, so their key is here
+        list_page = QWidget()
+        lp = QVBoxLayout(list_page)
+        lp.setContentsMargins(0, 0, 0, 0)
+        lp.addWidget(help_ui.labelled(
+            "(0.00) = tracking confidence", 'angle_confidence'))
+        lp.addWidget(angle_scroll, stretch=1)
+        self.target_stack.addWidget(list_page)
+
         ag = QVBoxLayout()
         ag.addLayout(angle_header)
-        ag.addWidget(angle_scroll, stretch=1)
+        ag.addLayout(view_row)
+        ag.addWidget(self.target_stack, stretch=1)
 
         # Quick select buttons for angles
         abtn = QHBoxLayout()
@@ -439,6 +472,7 @@ class AngleComparisonPanel(QWidget):
         self._populate_subjects()
         self._rebuild_sensor_checkboxes()
         self._annotate_angle_confidence()
+        self._sync_bones()
         self._load_video()
         self._update_plot()
 
@@ -500,6 +534,9 @@ class AngleComparisonPanel(QWidget):
                 tip.append("Poorly tracked — treat results for this channel with caution.")
             tip += [f"Note: {n}." for n in notes]
             cb.setToolTip("\n".join(tip))
+        self.bone_picker.set_confidence({
+            b: (per_angle[BONES[b][4][0]]['mean'] if BONES[b][4][0] in per_angle else None)
+            for b in BONES})
 
     def _rebuild_sensor_checkboxes(self):
         """
@@ -552,11 +589,34 @@ class AngleComparisonPanel(QWidget):
         for name, cb in self.angle_checkboxes.items():
             cb.setChecked(name in shoulder_names)
 
+    def _on_view_changed(self, index):
+        self.target_stack.setCurrentIndex(index)
+
+    def _on_bone_clicked(self, bone):
+        """Pick all of a bone's targets, or drop them if all were picked."""
+        selected = {n for n, cb in self.angle_checkboxes.items() if cb.isChecked()}
+        pick = selection_state(bone, selected) != 'all'
+        for name in bone_targets(bone):
+            cb = self.angle_checkboxes[name]
+            cb.blockSignals(True)
+            cb.setChecked(pick)
+            cb.blockSignals(False)
+        self._on_selection_changed()
+
+    def _sync_bones(self):
+        selected = self.state.get('selected_angles') or []
+        self.bone_picker.set_selection(selected)
+        picked = [BONES[b][0] for b in BONES if selection_state(b, selected) != 'none']
+        self.bone_picker.set_summary(
+            (", ".join(picked) + f" ({len(selected)} targets)")
+            if picked else "Click a bone to predict it")
+
     def _on_selection_changed(self):
         # Store selections in shared state
         self.state['selected_angles'] = [
             name for name, cb in self.angle_checkboxes.items() if cb.isChecked()
         ]
+        self._sync_bones()
         self.state['selected_sensors'] = [
             name for name, cb in self.sensor_checkboxes.items() if cb.isChecked()
         ]

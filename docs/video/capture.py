@@ -186,34 +186,49 @@ im, off = overlay(base, qim)
 save('tab2_tracking', im, {'dialog': [off[0], off[1], qim.width(), qim.height()]})
 
 # ---------------------------------------------------------------- Tab 3
-w.tabs.setCurrentIndex(2); pump(10)
+w.tabs.setCurrentWidget(w.tab_comparison); pump(10)
 t3 = w.tab_comparison
-t3.angle_scroll.verticalScrollBar().setValue(0); pump(4)
-save('tab3_none', win(), {'angles': rect_in(t3.angle_scroll, w)})
-targets = ['right_shoulder_elevation', 'right_upper_arm_direction', 'right_elbow_flexion']
-for n in targets:
-    t3.angle_checkboxes[n].setChecked(True)
-pump(6)
-t3.angle_scroll.ensureWidgetVisible(t3.angle_checkboxes[targets[0]]); pump(6)
-quick = [button(t3, 'Shoulder')]
+t3.view_buttons.button(0).click(); pump(4)
+picker = t3.bone_picker
+
+def bone_rect(bone, half=22):
+    """A box around the middle of a bone in the picker, in video pixels."""
+    picker.draw(); pump(2)
+    xy = np.mean(np.asarray(picker.lines[bone].get_xydata()), axis=0)
+    px, py = picker.ax.transData.transform(xy)
+    r = picker.devicePixelRatioF()
+    o = picker.mapTo(w, QPoint(0, 0))
+    lx, ly = o.x() + px / r, o.y() + picker.height() - py / r
+    return [round((lx - half) * S), round((ly - half) * S), round(2 * half * S), round(2 * half * S)]
+
+save('tab3_none', win(), {'angles': rect_in(t3.target_stack, w), 'views': rect_in(t3.view_buttons.button(0), w),
+                          'upper_arm': bone_rect('right_upper_arm')})
+t3._on_bone_clicked('right_upper_arm'); pump(6)
+save('tab3_upper', win(), {'angles': rect_in(t3.target_stack, w), 'upper_arm': bone_rect('right_upper_arm'),
+                           'forearm': bone_rect('right_forearm')})
+t3._on_bone_clicked('right_forearm'); pump(6)
+targets = list(w.state['selected_angles'])
 all_btns = sorted([b for b in t3.findChildren(QPushButton) if b.text() in ('All', 'None', 'Shoulder')],
                   key=lambda b: (b.mapTo(w, QPoint(0, 0)).y(), b.mapTo(w, QPoint(0, 0)).x()))
 angle_quick = [b for b in all_btns if b.mapTo(w, QPoint(0,0)).y() < t3.sensor_scroll.mapTo(w, QPoint(0,0)).y()]
 qx = [rect_in(b, w) for b in angle_quick]
 save('tab3_selected', win(), {
-    'angles': rect_in(t3.angle_scroll, w),
-    'target_box': rect_in(t3.angle_checkboxes[targets[0]], w),
+    'angles': rect_in(t3.target_stack, w),
+    'forearm': bone_rect('right_forearm'),
     'quick': [min(r[0] for r in qx), min(r[1] for r in qx), max(r[0]+r[2] for r in qx) - min(r[0] for r in qx), max(r[3] for r in qx)],
     'sensors': rect_in(t3.sensor_scroll, w), 'sensor_buttons': rect_in(t3.sensor_buttons, w),
     'plots': rect_in(t3.canvas, w), 'info': rect_in(t3.info_label, w)})
 
-# the Display only section at the bottom of the target list
+# the List view: the same selection by name, and the Display only section
+t3.view_buttons.button(1).click(); pump(6)
+t3.angle_scroll.ensureWidgetVisible(t3.angle_checkboxes['right_upper_arm_direction']); pump(6)
+save('tab3_list', win(), {'angles': rect_in(t3.target_stack, w), 'list_btn': rect_in(t3.view_buttons.button(1), w)})
 disp = [l for l in t3.findChildren(QLabel) if 'Display only' in l.text()][0]
 t3.angle_scroll.ensureWidgetVisible(t3.display_checkboxes['right_shoulder_flexion'], 0, 0); pump(6)
 first = rect_in(disp, w); last = rect_in(t3.display_checkboxes['right_shoulder_rotation'], w)
 save('tab3_display', win(), {'display': [first[0], first[1], max(first[2], last[2]),
                                          last[1] + last[3] - first[1]]})
-t3.angle_scroll.ensureWidgetVisible(t3.angle_checkboxes[targets[0]]); pump(6)
+t3.view_buttons.button(0).click(); pump(6)
 
 # the video and the cursor across the plots, moving through the arm raise
 sc = t3.scrubber
@@ -227,7 +242,7 @@ sc.set_frame(170); pump(6)
 save('tab3_cursor', win(), cursor_rects())
 
 # ---------------------------------------------------------------- Tab 4
-w.tabs.setCurrentIndex(3); pump(10)
+w.tabs.setCurrentWidget(w.tab_training); pump(10)
 t4 = w.tab_training; t4.refresh(); pump(6)
 badges = [b for b in t4.findChildren(HelpBadge) if b.isVisible()]
 seq_badge = min(badges, key=lambda b: abs(b.mapTo(w, QPoint(0,0)).y() - t4.seq_spin.mapTo(w, QPoint(0,0)).y()))
@@ -253,56 +268,70 @@ loss = [c for c in t4.findChildren(type(t3.canvas)) if c.isVisible()]
 save('tab4_done', win(), {'loss': rect_in(loss[0], w) if loss else [0,0,0,0]})
 
 # ---------------------------------------------------------------- Tab 5
+def pose():
+    w.tabs.setCurrentWidget(w.tab_pose); pump(12)
+    p = w.tab_pose
+    sc5 = p.scrubber
+    cr = rect_in(p.canvas, w)
+    rects = lambda: {'video': rect_in(sc5.video_label, w), 'scrub': rect_in(sc5.slider, w),
+                     'play': rect_in(sc5.play_btn, w), 'values': rect_in(p.values_label, w),
+                     'canvas': cr, 'true_ax': [cr[0], cr[1], cr[2] // 2, cr[3]],
+                     'pred_ax': [cr[0] + cr[2] // 2, cr[1], cr[2] - cr[2] // 2, cr[3]],
+                     'ghost': rect_in(p.ghost_toggle, w), 'info': rect_in(p.info_label, w)}
+    have = np.flatnonzero(p._data['owner'] >= 0)
+    # the arm raise in session 3, played at 12 frames a second
+    for i, f in enumerate(np.linspace(have[int(len(have) * 0.35)], have[int(len(have) * 0.62)], 48).astype(int)):
+        sc5.set_frame(int(f)); p.canvas.draw(); pump(3)
+        save(f'tab5_pose{i:02d}', win(), rects())
+    save('tab5_still', win(), rects())
+    # turned to look from the side
+    p.ax_pred.view_init(elev=12, azim=10); p.ax_true.view_init(elev=12, azim=10)
+    p.canvas.draw(); pump(4)
+    save('tab5_turned', win(), rects())
+    p.ax_pred.view_init(elev=10, azim=70); p.ax_true.view_init(elev=10, azim=70)
+    p.canvas.draw(); pump(2)
+
+pose()
+
+# ---------------------------------------------------------------- Tab 6
 def results(prefix):
-    w.tabs.setCurrentIndex(4); pump(12)
-    t5 = w.tab_results
-    sa = t5.findChild(QScrollArea); sa.verticalScrollBar().setValue(0); pump(6)
-    save(prefix + '_top', win(), {'headline': rect_in(t5.info_label, w), 'table': rect_in(t5.metrics_table, w),
-                                  'pred': rect_in(t5.canvas_pred, w)})
+    w.tabs.setCurrentWidget(w.tab_results); pump(12)
+    t6 = w.tab_results
+    sa = t6.findChild(QScrollArea); sa.verticalScrollBar().setValue(0); pump(6)
+    save(prefix + '_top', win(), {'headline': rect_in(t6.info_label, w), 'table': rect_in(t6.metrics_table, w),
+                                  'pred': rect_in(t6.canvas_pred, w)})
     # the confidence column: last visible column of the metrics table
-    tbl = t5.metrics_table
+    tbl = t6.metrics_table
     c = tbl.columnCount() - 1
     x = tbl.columnViewportPosition(c); vp = tbl.viewport().mapTo(w, QPoint(0, 0))
     SHOTS[prefix + '_top']['rects']['conf_col'] = [round((vp.x() + x) * S), round((tbl.mapTo(w, QPoint(0,0)).y()) * S),
                                                    round(tbl.columnWidth(c) * S), round(tbl.height() * S)]
-    # the direction target on the unit sphere, stepped through the test recording
-    if t5.sphere_group.isVisible() and prefix == 'tab5':
-        sa.ensureWidgetVisible(t5.sphere_group, 0, 0); pump(8)
-        n = t5.sphere_slider.maximum()
-        for i, k in enumerate(np.linspace(0.25 * n, 0.6 * n, 36).astype(int)):
-            t5.sphere_slider.setValue(int(k)); t5.canvas_sphere.draw(); pump(3)
-            cr = rect_in(t5.canvas_sphere, w)       # the sphere sits in the middle
-            save(f'tab5_sph{i:02d}', win(), {'sphere': [cr[0] + (cr[2] - cr[3]) // 2, cr[1], cr[3], cr[3]],
-                                             'sphere_slider': rect_in(t5.sphere_slider, w),
-                                             'sphere_label': rect_in(t5.sphere_label, w),
-                                             'sphere_group': rect_in(t5.sphere_group, w)})
-        save('tab5_sphere', win(), SHOTS['tab5_sph35']['rects'])
     sa.verticalScrollBar().setValue(sa.verticalScrollBar().maximum()); pump(8)
-    exports = [button(t5, 'Export Metrics'), button(t5, 'Export Report'), button(t5, 'Save All Plots')]
+    exports = [button(t6, 'Export Metrics'), button(t6, 'Export Report'), button(t6, 'Save All Plots')]
     xs = [rect_in(b, w) for b in exports]
-    save(prefix + '_bottom', win(), {'importance': rect_in(t5.canvas_importance, w),
+    save(prefix + '_bottom', win(), {'importance': rect_in(t6.canvas_importance, w),
                                      'exports': [xs[0][0], xs[0][1], xs[2][0] + xs[2][2] - xs[0][0], xs[0][3]]})
     sa.verticalScrollBar().setValue(0); pump(4)
 
-results('tab5')
+results('tab6')
 
 # ---------------------------------------------------------------- iterate
 imp = w.state['model'].get_feature_importance()
 sens = list(w.state['selected_sensors'])
 keep = [sens[i] for i in np.argsort(imp)[::-1][:5]]
-w.tabs.setCurrentIndex(2); pump(8)
+w.tabs.setCurrentWidget(w.tab_comparison); pump(8)
 for name, cb in t3.sensor_checkboxes.items():
     cb.setChecked(name in keep)
 pump(8)
 save('tab3_iter', win(), {'sensors': rect_in(t3.sensor_scroll, w), 'plots': rect_in(t3.canvas, w)})
-w.tabs.setCurrentIndex(3); pump(8); t4.refresh(); pump(4)
+w.tabs.setCurrentWidget(w.tab_training); pump(8); t4.refresh(); pump(4)
 train_and_capture('train2')
-results('tab5_iter')
+results('tab6_iter')
 json.dump({'keep': keep, 'importance': dict(zip(sens, map(float, imp)))},
           open(os.path.join(OUT, 'iteration.json'), 'w'), indent=1)
 
 # ---------------------------------------------------------------- help, menu, reset
-w.tabs.setCurrentIndex(3); pump(8)
+w.tabs.setCurrentWidget(w.tab_training); pump(8)
 save('help_badge', win(), {'badge': rect_in(seq_badge, w)})
 base = win()
 help_menu = [a for a in mb.actions() if a.menu()][0].menu()

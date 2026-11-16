@@ -1,5 +1,5 @@
 """
-Main application window with 5-tab navigation.
+Main application window with 6-tab navigation.
 """
 
 from PyQt6.QtWidgets import (
@@ -13,6 +13,7 @@ from gui.panels.data_import import DataImportPanel
 from gui.panels.skeleton_viewer import SkeletonViewerPanel
 from gui.panels.angle_comparison import AngleComparisonPanel
 from gui.panels.training import TrainingPanel
+from gui.panels.pose_comparison import PoseComparisonPanel
 from gui.panels.results_dashboard import ResultsDashboardPanel
 from gui.state import ready_subjects
 from gui import design, icons
@@ -31,7 +32,8 @@ TABS = [
     ("2  Skeleton Viewer",  "#tab-2--skeleton-viewer"),
     ("3  Angles && Sensors", "#tab-3--angles--sensors"),
     ("4  Training",         "#tab-4--training"),
-    ("5  Results",          "#tab-5--results"),
+    ("5  Pose",             "#tab-5--pose-comparison"),
+    ("6  Results",          "#tab-6--results"),
 ]
 
 
@@ -92,7 +94,9 @@ class MainWindow(QMainWindow):
             'ground_truth': None,
             'metrics': None,          # pooled metrics dict
             'metrics_per_subject': None,  # {subject_id: metrics dict}
-            'predictions_per_subject': None,  # {subject_id: (truth, prediction)}
+            # {subject_id: {'truth', 'pred', 'times', 'frames'}}; frames maps
+            # each prediction to its video frame (-1 where none is close)
+            'predictions_per_subject': None,
             'scaler': None,
             'target_scaler': None,    # standardises the targets for training
             'config': None,
@@ -107,11 +111,12 @@ class MainWindow(QMainWindow):
         self.tab_skeleton = SkeletonViewerPanel(self.state)
         self.tab_comparison = AngleComparisonPanel(self.state)
         self.tab_training = TrainingPanel(self.state)
+        self.tab_pose = PoseComparisonPanel(self.state)
         self.tab_results = ResultsDashboardPanel(self.state)
 
         for panel, (title, _) in zip(
             (self.tab_import, self.tab_skeleton, self.tab_comparison,
-             self.tab_training, self.tab_results), TABS,
+             self.tab_training, self.tab_pose, self.tab_results), TABS,
         ):
             self.tabs.addTab(panel, title)
 
@@ -289,7 +294,7 @@ class MainWindow(QMainWindow):
         self.reset_btn.setEnabled(False)
         try:
             for panel in (self.tab_import, self.tab_training, self.tab_skeleton,
-                          self.tab_comparison, self.tab_results):
+                          self.tab_comparison, self.tab_pose, self.tab_results):
                 if hasattr(panel, 'reset'):
                     panel.reset()
 
@@ -326,13 +331,13 @@ class MainWindow(QMainWindow):
 
     def _workflow_progress(self):
         """
-        How far the user has got. The five tabs are a strict sequence, so the
+        How far the user has got. The six tabs are a strict sequence, so the
         tab bar can show what is ready and what is still waiting on an earlier
         step. Returns the number of steps completed.
         """
         s = self.state
         if s.get('metrics') is not None:
-            return 5
+            return 6
         if s.get('model') is not None:
             return 4
         if s.get('selected_angles') and s.get('selected_sensors'):
@@ -359,6 +364,7 @@ class MainWindow(QMainWindow):
             "Needs a subject added in Tab 1",
             "Needs a skeleton extracted in Tab 1",
             "Needs angle and sensor channels chosen in Tab 3",
+            "Needs a trained model from Tab 4",
             "Needs a trained model from Tab 4",
         ]
         for index, (title, _) in enumerate(TABS):

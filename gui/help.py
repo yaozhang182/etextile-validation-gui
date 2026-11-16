@@ -107,18 +107,19 @@ HELP = {
         "actually doing. A sensor shows — outside the time it recorded.",
         "#tab-3--angles--sensors",
     ),
-    'direction_sphere': (
-        "Directions in 3D",
-        "A direction target is a point on a sphere around the joint: where the "
-        "upper arm, forearm, thigh or shank pointed, relative to the chest (arm) "
-        "or the pelvis (leg). Black is the ground truth from the video, red the "
-        "model's prediction, for one moment of the test recording: move the "
-        "slider to step through it, and drag the sphere with the mouse to look "
-        "from another side. The orange arc between the two tips is the error of "
-        "that moment, the angle between the arrows.<br><br>This panel appears "
-        "when a direction target (e.g. right_upper_arm_direction) was among the "
-        "targets the model was trained on.",
-        "#tab-5--results",
+    'bone_picker': (
+        "Picking bones",
+        "<b>Skeleton</b>: click a bone to predict it; click again to remove "
+        "it. A picked bone gets a blue halo, dashed if only some of its targets "
+        "are ticked. Bones are coloured by tracking confidence (green good, red "
+        "poor). The outline is seen from the camera, so the person's right is "
+        "on your left.<br><br>An arm or leg bone adds its direction (where it "
+        "points) and the angle at its joint: the upper arm adds upper arm "
+        "direction and shoulder elevation, the forearm adds forearm direction "
+        "and elbow flexion. The foot, trunk and head add their angles.<br><br>"
+        "<b>List</b>: every target by name, plus the display-only angles. Both "
+        "views edit the same selection.",
+        "#tab-3--angles--sensors",
     ),
     'sensor_inputs': (
         "Sensor channels (inputs)",
@@ -156,6 +157,21 @@ HELP = {
         "#hyperparameters",
     ),
     # ---------------------------------------------------------- Tab 5
+    'pose_comparison': (
+        "Pose comparison",
+        "Left: the skeleton tracked from the video, the ground truth. Right: "
+        "the same skeleton with every predicted bone redrawn where the model "
+        "said it pointed (red), using the true bone length. Bones that were not "
+        "predicted are copied from the ground truth; the grey ghost shows the "
+        "true position of the redrawn ones.<br><br>Down an arm or leg the "
+        "error is carried along: with upper arm and forearm both predicted, the "
+        "forearm starts at the predicted elbow.<br><br>Play the video or drag "
+        "its slider to move both skeletons; drag either skeleton to turn both. "
+        "Angle-only targets (elbow, knee, trunk...) cannot be drawn and are "
+        "listed with their values instead.",
+        "#tab-5--pose-comparison",
+    ),
+    # ---------------------------------------------------------- Tab 6
     'headline_metrics': (
         "The four metrics",
         "<b>MPJAE</b> — mean absolute error in degrees. Lower is better.<br>"
@@ -173,7 +189,7 @@ HELP = {
         "before the pooled numbers: one unusual wearer can carry the average, "
         "and a garment that works for three people but not a fourth is a "
         "different finding from one that works moderately for everyone.",
-        "#tab-5--results",
+        "#tab-6--results",
     ),
     'tracking_conf_column': (
         "Tracking conf. column",
@@ -192,7 +208,7 @@ HELP = {
         "the garment by: the tables give one number per channel, but only the "
         "curves show <i>where</i> the error is — a constant offset, drift over "
         "time, or a specific movement the sensors miss entirely.",
-        "#tab-5--results",
+        "#tab-6--results",
     ),
     'sensor_importance': (
         "Sensor importance",
@@ -201,7 +217,7 @@ HELP = {
         "into garment design: a channel with near-zero importance is not "
         "contributing to this movement and could be moved, merged, or dropped in "
         "the next revision.",
-        "#tab-5--results",
+        "#tab-6--results",
     ),
 }
 

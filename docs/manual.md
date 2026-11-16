@@ -20,7 +20,8 @@ straight away, also [download the example data](https://github.com/yaozhang182/e
 - [Tab 2 — Skeleton Viewer](#tab-2--skeleton-viewer)
 - [Tab 3 — Angles & Sensors](#tab-3--angles--sensors) · [joint angle definitions](#joint-angle-definitions)
 - [Tab 4 — Training](#tab-4--training) · [changing targets/inputs](#changing-targets-and-inputs) · [hyperparameters](#hyperparameters)
-- [Tab 5 — Results](#tab-5--results) · [reading the numbers](#reading-the-numbers)
+- [Tab 5 — Pose Comparison](#tab-5--pose-comparison)
+- [Tab 6 — Results](#tab-6--results) · [reading the numbers](#reading-the-numbers)
 - [Glossary](#glossary)
 - [Troubleshooting](#troubleshooting)
 
@@ -228,10 +229,12 @@ or use `input_data/examples_data` if you cloned the repository.
    so you only pay this once per recording.
 3. **Tab 2** → drag the timeline. Check the skeleton follows the body. Click
    **Tracking Quality** to see which joints were tracked worst.
-4. **Tab 3** → tick the joint angles you want to predict (try the three
-   right-shoulder channels) and leave all sensor channels ticked.
+4. **Tab 3** → click the bones you want to predict on the body outline (try
+   the right upper arm) and leave all sensor channels ticked.
 5. **Tab 4** → **Start Training**. Defaults are fine.
-6. **Tab 5** → read the per-joint accuracy.
+6. **Tab 5** → play the test recording and watch the predicted bones move in
+   the skeleton next to the tracked one.
+7. **Tab 6** → read the per-joint accuracy.
 
 A tick appears on each tab in the bar as you complete that step.
 
@@ -366,7 +369,9 @@ what the model predicts, and what it predicts from.
 | Control | What it does |
 |---|---|
 | **Data** / **Subject** | which session the plots show |
-| **Targets** | what the model can predict, grouped by body part — scroll the list to reach them all; the *Display only* angles at the bottom can be plotted but not trained on |
+| **Skeleton** / **List** | two views of the same selection: a body outline to click, or every target by name |
+| **Targets**, Skeleton view | click a bone to predict it, click again to remove it; picked bones get a blue halo (dashed when only some of their targets are ticked), and each bone is coloured by tracking confidence; the outline is seen from the camera, so the person's right is on your left |
+| **Targets**, List view | every target by name, grouped by body part; the *Display only* angles at the bottom can be plotted but not trained on |
 | **All** / **None** / **Shoulder** | quick selection, under the angle list |
 | **Sensor Channels (inputs)** | which garment channels the model may use — one tickbox per channel, also scrollable |
 | **All** / **None** | quick selection, under the sensor list |
@@ -383,6 +388,24 @@ the garment is.
 
 Only channels present in **every** session appear. If a session has extra
 channels, a note says which are being ignored.
+
+**What a bone adds.** An arm or leg bone adds its direction, where it points,
+and the angle at the joint it ends in:
+
+| Bone | Targets |
+|---|---|
+| upper arm | `…_upper_arm_direction`, `…_shoulder_elevation` |
+| forearm | `…_forearm_direction`, `…_elbow_flexion` |
+| thigh | `…_thigh_direction`, `…_hip_elevation` |
+| shank | `…_shank_direction`, `…_knee_flexion` |
+| foot | `…_ankle_flexion` |
+| trunk | `lumbar_bending`, `lumbar_rotation` |
+| head | `neck_flexion`, `neck_bending` |
+
+Upper arm and forearm together describe the whole arm: the upper arm gives
+the first two degrees of freedom of the shoulder, the forearm adds the elbow
+and the shoulder's rotation. In the List view you can untick single targets,
+for example the elevation, which repeats what the direction already says.
 
 **Choosing targets.** Pick what the garment could plausibly sense — a sleeve
 cannot measure knee flexion. Start with two or three related targets; a focused
@@ -574,10 +597,10 @@ elevation climbs smoothly from 0° to 180° while flexion steps from about 0° t
 180° as the arm passes horizontal.
 
 The error of a direction target is the **angle between the predicted and the
-true direction**, in degrees, so the error columns in Tab 5 read the same for
+true direction**, in degrees, so the error columns in Tab 6 read the same for
 every target.
 
-#### Changes in versions 0.2.4 to 0.2.6
+#### Changes in versions 0.2.4 to 0.2.7
 
 Version 0.2.4 replaced the angle computation with the SMD v4 definitions, and
 0.2.5 stopped unwrapping the twist channels so that every channel stays in its
@@ -593,7 +616,9 @@ Version 0.2.6 replaced shoulder and hip flexion, abduction and rotation as
 training targets by the elevation and direction targets above, made the pelvis
 angles and lumbar extension display only, and standardises every target before
 training so that angles and unit vectors weigh equally. It also added the video
-cursor in Tab 3 and the direction view in Tab 5.
+cursor in Tab 3 and a 3D view of the predicted directions. Version 0.2.7
+lets you pick targets by clicking bones in Tab 3, and replaced the 3D
+direction view by the Pose Comparison tab (Tab 5); the results moved to Tab 6.
 
 ---
 
@@ -639,7 +664,7 @@ If Tab 4 reports **0 subjects**, no session has finished extraction — go back 
 Tab 1 and run *Extract Skeleton & Compute Angles*.
 
 **A useful loop.** Train once with all sensor channels, read *Sensor Importance*
-on Tab 5, then retrain with only the channels that mattered. If accuracy holds,
+on Tab 6, then retrain with only the channels that mattered. If accuracy holds,
 the others are redundant and the next garment revision can drop them.
 
 ### Hyperparameters
@@ -672,9 +697,47 @@ What each one is:
 
 ---
 
-## Tab 5 — Results
+## Tab 5 — Pose Comparison
 
-![Results tab](img/tab5_results.png)
+![Pose comparison tab](img/tab5_pose.png)
+
+The test recording, played back three ways side by side: the **video**, the
+**skeleton tracked from it** (the ground truth), and the same skeleton with
+every **predicted bone redrawn** where the model said it pointed. This is the
+quickest way to see what an error of 20 degrees actually looks like, and
+whether a bad stretch is the model's fault or the tracking's.
+
+| Control | What it does |
+|---|---|
+| **Test subject** | which test session is shown |
+| **Show video** | show or hide the video |
+| **Show true position of predicted bones** | draws the tracked position of each redrawn bone as a grey dashed line in the right skeleton |
+| **Play** / slider | plays or scrubs the video; both skeletons follow |
+| Dragging a skeleton | turns it, and the other one with it |
+| Line under the slider | every target at this moment: for a direction, how far off it is; for an angle, the predicted and the true value |
+
+**How the right skeleton is built.** Every bone with a direction target (upper
+arm, forearm, thigh, shank) is redrawn from where it starts, with its true
+length, pointing in the predicted direction, which is turned back from the
+chest's or pelvis's frame into the room using the tracked skeleton. The number
+at its end is the angle between predicted and true direction at that moment.
+Bones that were not predicted are copied from the tracked skeleton. Down a limb
+the error is carried along: with the upper arm and the forearm both predicted,
+the forearm starts at the predicted elbow, so a shoulder error shows at the
+wrist too, as it would on the body.
+
+Angle-only targets (elbow and knee flexion, the trunk and neck angles, the
+elevations) cannot be drawn: an elbow angle does not say where the forearm
+points. They are listed under the slider with their predicted and true values.
+
+Frames without a prediction, outside the time both recordings cover or within
+the first *Sequence Length* frames, show the tracked skeleton only.
+
+---
+
+## Tab 6 — Results
+
+![Results tab](img/tab6_results.png)
 
 | Element | What it shows |
 |---|---|
@@ -682,7 +745,6 @@ What each one is:
 | **Per-Subject Results** | the same metrics for each test session separately (shown when there are several) |
 | **Metrics Summary** | per-joint metrics, plus the ground truth's tracking confidence |
 | **Prediction vs Ground Truth** | one panel per target: the true trace in black, the model's in red; a direction shows its three components, true solid and predicted dashed |
-| **Directions in 3D** | shown when a direction target was trained: where the limb pointed (black) and where the model said it pointed (red) as two arrows on a unit sphere, with the error angle between them in orange; the slider steps through the test recording, and dragging the sphere turns the view |
 | **Sensor Importance** | which channels the model relied on |
 | **Export Metrics CSV** | the metrics table as CSV |
 | **Export Report** | a text summary |
@@ -696,14 +758,6 @@ give one number per channel; the curves show *where* the error is — a constant
 offset, drift over the recording, or a particular movement the sensors miss
 entirely. The tab scrolls, so keep going down for the sensor chart and the
 export buttons.
-
-**Directions in 3D** shows a direction target as what it is, a point on a
-sphere. Drag the slider to step through the test recording: the black arrow is
-where the limb pointed in the video, the red one where the model said it
-pointed, and the orange arc between their tips is the error of that moment.
-Drag the sphere itself to look from another side.
-
-![Directions in 3D](img/tab5_directions.png)
 
 **Sensor Importance** is what feeds back into garment design — a channel with
 near-zero importance is not contributing and could be moved or removed.

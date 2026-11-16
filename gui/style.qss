@@ -136,6 +136,18 @@ QPushButton[subtle="true"]:hover {
     color: {{ACCENT}};
 }
 
+/* Two-way view switch (Tab 3: Skeleton / List). */
+QPushButton[segment="true"] {
+    min-height: 28px;
+    border-radius: 0;
+}
+QPushButton[segment="true"]:checked {
+    background: {{ACCENT_SOFT}};
+    border-color: {{ACCENT}};
+    color: {{ACCENT}};
+    font-weight: 600;
+}
+
 /* -------------------------------------------------------------- inputs --- */
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
     background: {{SURFACE}};

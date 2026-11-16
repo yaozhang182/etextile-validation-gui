@@ -10,7 +10,7 @@ Usage:
 
 import sys
 
-__version__ = '0.2.6'
+__version__ = '0.2.7'
 
 
 def selftest():
@@ -109,7 +109,7 @@ def selftest():
         apply_theme(app)
         w = MainWindow()
         for tab in (w.tab_import, w.tab_skeleton, w.tab_comparison,
-                    w.tab_training, w.tab_results):
+                    w.tab_training, w.tab_pose, w.tab_results):
             tab.refresh()
     check('build main window', build_window)
 

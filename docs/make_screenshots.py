@@ -34,7 +34,7 @@ EXAMPLES = ROOT / 'input_data' / 'examples_data'
 WINDOW = (1280, 840)
 
 TARGET_ANGLES = ['right_shoulder_elevation', 'right_upper_arm_direction',
-                 'right_elbow_flexion']
+                 'right_forearm_direction', 'right_elbow_flexion']
 
 
 def add_session(window, split, subject_id, n):
@@ -123,7 +123,7 @@ def main():
     shoot(window, 'tab2_skeleton_viewer')
 
     # --- Tab 3 ---------------------------------------------------------
-    window.tabs.setCurrentIndex(2)
+    window.tabs.setCurrentWidget(window.tab_comparison)
     for name in TARGET_ANGLES:
         cb = window.tab_comparison.angle_checkboxes.get(name)
         if cb is not None:
@@ -136,7 +136,7 @@ def main():
     shoot(window, 'tab3_angles_sensors')
 
     # --- Tab 4 ---------------------------------------------------------
-    window.tabs.setCurrentIndex(3)
+    window.tabs.setCurrentWidget(window.tab_training)
     window.tab_training.refresh()
 
     if args.train and have_skeletons:
@@ -163,16 +163,23 @@ def main():
     shoot(window, 'tab4_training')
 
     # --- Tab 5 ---------------------------------------------------------
-    window.tabs.setCurrentIndex(4)
+    window.tabs.setCurrentWidget(window.tab_pose)
+    p = window.tab_pose
+    p.refresh()
+    app.processEvents()
+    if p._data is not None:
+        # a moment with the arm raised, where the redrawn bones stand out
+        frames = np.flatnonzero(p._data['owner'] >= 0)
+        p.scrubber.set_frame(int(frames[int(len(frames) * 0.55)]))
+        app.processEvents()
+        p.canvas.draw()
+    shoot(window, 'tab5_pose')
+
+    # --- Tab 6 ---------------------------------------------------------
+    window.tabs.setCurrentWidget(window.tab_results)
     window.tab_results.refresh()
     app.processEvents()
-    shoot(window, 'tab5_results')
-    r = window.tab_results
-    if r.sphere_group.isVisible():
-        r.sphere_slider.setValue(int(r.sphere_slider.maximum() * 0.4))
-        app.processEvents()
-        r.canvas_sphere.draw()
-        shoot(r.sphere_group, 'tab5_directions')
+    shoot(window, 'tab6_results')
 
     # --- Add Subject dialog, valid and blocked -------------------------
     from gui.panels.data_import import AddSubjectDialog

@@ -165,7 +165,7 @@ def test_subject_ids_autoincrement_per_split():
 def test_every_tab_refreshes_with_no_data():
     w = MainWindow()
     for tab in (w.tab_import, w.tab_skeleton, w.tab_comparison,
-                w.tab_training, w.tab_results):
+                w.tab_training, w.tab_pose, w.tab_results):
         tab.refresh()
 
 
