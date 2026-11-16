@@ -87,11 +87,21 @@ class PoseComparisonPanel(QWidget):
         row = QHBoxLayout()
         row.addWidget(video, stretch=3)
         self.fig = Figure(figsize=(9, 4.6))
-        self.ax_true = self.fig.add_subplot(121, projection='3d')
-        self.ax_pred = self.fig.add_subplot(122, projection='3d')
-        self.fig.subplots_adjust(left=0, right=1, bottom=0, top=1, wspace=0)
+        # each skeleton gets exactly half the canvas, edge to edge: mplot3d's
+        # default margins left them small in a sea of white
+        self.ax_true = self.fig.add_axes([0.0, 0.0, 0.5, 0.93], projection='3d')
+        self.ax_pred = self.fig.add_axes([0.5, 0.0, 0.5, 0.93], projection='3d')
+        # titles above the axes, where no bone can reach them
+        self.fig.text(0.25, 0.965, "Tracked from the video (ground truth)",
+                      ha='center', va='center', fontsize=10, color=design.TEXT)
+        self.fig.text(0.75, 0.965, "Predicted bones redrawn (red)",
+                      ha='center', va='center', fontsize=10, color=design.TEXT)
         self.canvas = FigureCanvas(self.fig)
         self.canvas.setMinimumHeight(380)
+        # The rendered image can come out a pixel narrower than the widget;
+        # fill the widget first so that column is blank, not a stale smear.
+        self.canvas.setAutoFillBackground(True)
+        self.canvas.setStyleSheet(f"background-color: {design.SURFACE};")
         row.addWidget(self.canvas, stretch=6)
         layout.addLayout(row, stretch=1)
         layout.addWidget(self.scrubber)
@@ -106,13 +116,11 @@ class PoseComparisonPanel(QWidget):
         self._reset_axes()
 
     def _reset_axes(self):
-        for ax, title in ((self.ax_true, "Tracked from the video (ground truth)"),
-                          (self.ax_pred, "Predicted bones redrawn (red)")):
+        for ax in (self.ax_true, self.ax_pred):
             ax.clear()
             style_3d_axes(ax)
             ax.set_axis_off()            # the body is the reference; boxes only clutter
-            ax.set_title(title, fontsize=10, y=0.98)
-            ax.set_box_aspect((1, 1, 1), zoom=1.35)
+            ax.set_box_aspect((1, 1, 1), zoom=1.7)
             ax.view_init(elev=10, azim=70)
 
     # --- tab life cycle ------------------------------------------------------
@@ -208,12 +216,22 @@ class PoseComparisonPanel(QWidget):
             else:
                 readout.append((name, 'val', (pred[idx, sl.start], truth[idx, sl.start])))
 
-        height = np.nanmedian(np.linalg.norm(joints[:, 15] - (joints[:, 7] + joints[:, 8]) / 2,
-                                             axis=1))
+        # Frame the body, not the pelvis: a seated person's pelvis sits low,
+        # and an arm raised overhead must stay in view. The box is the space
+        # the body (and the redrawn bones) take up over the whole recording,
+        # held fixed so the view does not breathe from frame to frame.
+        tracked = joints[np.isfinite(joints).all(axis=(1, 2))]
+        both = np.concatenate([tracked, recon]) if len(tracked) else recon
+        rel = both - both[:, :1]                         # relative to the pelvis
+        lo, hi = np.nanpercentile(rel.min(axis=1), 2, axis=0), \
+            np.nanpercentile(rel.max(axis=1), 98, axis=0)
+        offset = (lo + hi) / 2
+        half = 0.55 * float(np.max(hi - lo))
         self._data = {
             'sid': sid, 'joints': joints, 'recon': recon, 'owner': owner,
             'sample_frames': frames[idx], 'bones': set(dirs), 'readout': readout,
-            'extent': 0.6 * (height if np.isfinite(height) and height > 0.3 else 1.6),
+            'offset': offset,
+            'extent': half if np.isfinite(half) and half > 0.2 else 1.0,
         }
         self._build_artists()
         n_dir = len(dirs)
@@ -243,8 +261,10 @@ class PoseComparisonPanel(QWidget):
         for bone in d['bones']:
             a, b = BONES[bone][1], BONES[bone][2]
             art['ghost'][bone], = self.ax_pred.plot([], [], [], color=GHOST, lw=2.2, ls='--')
-            art['err'][bone] = self.ax_pred.text(0, 0, 0, "", color=PRED, fontsize=9,
-                                                 fontweight='bold')
+            art['err'][bone] = self.ax_pred.text(
+                0, 0, 0, "", color=PRED, fontsize=9, fontweight='bold',
+                ha='center', va='center',
+                bbox=dict(boxstyle='round,pad=0.15', fc='white', ec='none', alpha=0.85))
         art['pts_true'] = self.ax_true.plot([], [], [], 'o', ms=3, color=TRUE)[0]
         art['pts_pred'] = self.ax_pred.plot([], [], [], 'o', ms=3, color=TRUE)[0]
         art['none'] = self.ax_pred.text2D(0.5, 0.04, "", transform=self.ax_pred.transAxes,
@@ -264,7 +284,8 @@ class PoseComparisonPanel(QWidget):
         have_true = np.isfinite(true).all()
         recon = d['recon'][s] if s >= 0 else (true if have_true else None)
 
-        centre = true[0] if have_true else (recon[0] if recon is not None else np.zeros(3))
+        pelvis = true[0] if have_true else (recon[0] if recon is not None else np.zeros(3))
+        centre = pelvis + d['offset']
         e = d['extent']
         cx, cy, cz = _xyz(centre)
         for ax in (self.ax_true, self.ax_pred):
@@ -300,10 +321,14 @@ class PoseComparisonPanel(QWidget):
                 line.set_data_3d(*_xyz(true[[a, b]]))   # where the bone really was
             else:
                 line.set_data_3d([], [], [])
-            x, y, z = _xyz(recon[b])
+            # just past the end of the bone, along it, so the number never
+            # sits on the bone or on the joint where two labels meet
+            vec = recon[b] - recon[a]
+            tip = recon[b] + 0.35 * vec
+            x, y, z = _xyz(tip)
             text.set_position((x[0], y[0]))
             text.set_3d_properties(z[0], None)
-            text.set_text(f" {errs[BONES[bone][3]][s]:.0f}°")
+            text.set_text(f"{errs[BONES[bone][3]][s]:.0f}°")
         art['none'].set_text("" if s >= 0 else
                              "No prediction at this frame: outside the time both "
                              "streams cover, or within the first sequence-length "

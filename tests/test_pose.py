@@ -219,7 +219,7 @@ def test_the_predicted_bone_is_redrawn_and_the_rest_copied():
     assert np.allclose(seg(art['pred'], (2, 5)), seg(art['true'], (2, 5))), "legs copied"
     assert "off by 20.0" in p.values_label.text(), p.values_label.text()
     assert "predicted" in p.values_label.text() and "right_elbow_flexion" in p.values_label.text()
-    assert art['err']['right_upper_arm'].get_text().strip() == "20°"
+    assert art['err']['right_upper_arm'].get_text() == "20°"
 
 
 def test_turning_one_skeleton_turns_the_other():
