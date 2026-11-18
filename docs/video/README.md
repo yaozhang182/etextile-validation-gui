@@ -1,6 +1,6 @@
 # Tutorial video
 
-The [5-minute tutorial](https://www.youtube.com/watch?v=PFFmzeKfwpI) is generated
+The [6-minute tutorial](https://youtu.be/JN8KxHRzAbk) is generated
 from the real application, so it can be regenerated whenever the interface changes.
 
 | File | What it does |

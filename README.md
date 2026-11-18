@@ -2,13 +2,13 @@
 
 [![GitHub stars](https://img.shields.io/github/stars/yaozhang182/etextile-validation-gui?style=social)](https://github.com/yaozhang182/etextile-validation-gui/stargazers)
 [![Report a bug](https://img.shields.io/badge/report-a%20bug-d73a4a)](https://github.com/yaozhang182/etextile-validation-gui/issues/new)
-[![Tutorial video](https://img.shields.io/badge/tutorial-YouTube-red?logo=youtube)](https://www.youtube.com/watch?v=PFFmzeKfwpI)
+[![Tutorial video](https://img.shields.io/badge/tutorial-YouTube-red?logo=youtube)](https://youtu.be/JN8KxHRzAbk)
 [![Download for Windows](https://img.shields.io/badge/download-Windows%20app-2ea44f?logo=windows)](https://github.com/yaozhang182/etextile-validation-gui/releases/latest/download/ETextileValidation-windows.zip)
 [![Download example data](https://img.shields.io/badge/download-example%20data-2ea44f)](https://github.com/yaozhang182/etextile-validation-gui/releases/latest/download/ETextileValidation-example-data.zip)
 
-[![Watch the 5-minute tutorial on YouTube](docs/img/tutorial_thumbnail.jpg)](https://www.youtube.com/watch?v=PFFmzeKfwpI)
+[![Watch the 6-minute tutorial on YouTube](docs/img/tutorial_thumbnail.jpg)](https://youtu.be/JN8KxHRzAbk)
 
-▶ **[Watch the 5-minute tutorial](https://www.youtube.com/watch?v=PFFmzeKfwpI)** — the whole workflow, every tab and
+▶ **[Watch the 6-minute tutorial](https://youtu.be/JN8KxHRzAbk)** — the whole workflow, every tab and
 button, on the bundled example data.
 
 A no-code desktop tool for validating wearable motion-sensing garments. Give it a
