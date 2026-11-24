@@ -2,14 +2,20 @@
 
 [![GitHub stars](https://img.shields.io/github/stars/yaozhang182/etextile-validation-gui?style=social)](https://github.com/yaozhang182/etextile-validation-gui/stargazers)
 [![Report a bug](https://img.shields.io/badge/report-a%20bug-d73a4a)](https://github.com/yaozhang182/etextile-validation-gui/issues/new)
+[![Project page](https://img.shields.io/badge/project-page-0b5c8a)](https://yaozhang182.github.io/etextile-validation-gui/)
+[![arXiv](https://img.shields.io/badge/arXiv-2611.28027-b31b1b)](https://arxiv.org/abs/2611.28027)
 [![Tutorial video](https://img.shields.io/badge/tutorial-YouTube-red?logo=youtube)](https://youtu.be/JN8KxHRzAbk)
 [![Download for Windows](https://img.shields.io/badge/download-Windows%20app-2ea44f?logo=windows)](https://github.com/yaozhang182/etextile-validation-gui/releases/latest/download/ETextileValidation-windows.zip)
 [![Download example data](https://img.shields.io/badge/download-example%20data-2ea44f)](https://github.com/yaozhang182/etextile-validation-gui/releases/latest/download/ETextileValidation-example-data.zip)
 
-[![Watch the 6-minute tutorial on YouTube](docs/img/tutorial_thumbnail.jpg)](https://youtu.be/JN8KxHRzAbk)
+[![Project page: interactive tutorial and demo](docs/img/project_page.jpg)](https://yaozhang182.github.io/etextile-validation-gui/)
 
-▶ **[Watch the 6-minute tutorial](https://youtu.be/JN8KxHRzAbk)** — the whole workflow, every tab and
-button, on the bundled example data.
+🌐 **[Project page](https://yaozhang182.github.io/etextile-validation-gui/)**: an interactive
+tutorial of every tab, the prediction viewer running in your browser, and how to get started.<br>
+▶ **[Detailed tutorial video (6 min)](https://youtu.be/JN8KxHRzAbk)**: the whole workflow, every
+tab and button, on the bundled example data.<br>
+📄 **[Paper on arXiv](https://arxiv.org/abs/2611.28027)**: A No-Code Toolchain for Validating
+Wearable Motion Sensing Systems.
 
 A no-code desktop tool for validating wearable motion-sensing garments. Give it a
 webcam recording and your garment's sensor CSV; it derives joint-angle ground

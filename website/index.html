@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>No-Code Wearable Validation</title>
+<meta name="description" content="A no-code toolchain for validating wearable motion sensing systems: webcam ground truth, model training and test reports for e-textile garments, without motion capture or programming.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://yaozhang182.github.io/etextile-validation-gui/">
+<meta property="og:title" content="A No-Code Toolchain for Validating Wearable Motion Sensing Systems">
+<meta property="og:description" content="Film the garment with a webcam, log its sensors, and get a test report in minutes. No motion capture, no code.">
+<meta property="og:image" content="https://yaozhang182.github.io/etextile-validation-gui/media/cover.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://yaozhang182.github.io/etextile-validation-gui/media/cover.jpg">
+<link rel="icon" href="media/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('etv-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <a class="brand" href="#top"><span class="mark" aria-hidden="true"></span>E-Textile Validation</a>
+  <nav class="links" aria-label="Sections">
+    <a href="#setup">Setup</a><a href="#pipeline">How it works</a><a href="#tutorial">Tutorial</a>
+    <a href="#targets">Targets</a><a href="#demo">Demo</a><a href="#layouts">Layouts</a>
+    <a href="#start">Get started</a><a href="#cite">Cite</a>
+  </nav>
+  <div class="nav-right">
+    <button class="icon-btn" id="themeBtn" aria-label="Switch between light and dark"><span class="moon"></span></button>
+    <a class="btn small" href="https://github.com/yaozhang182/etextile-validation-gui">GitHub</a>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ======================================================= hero -->
+<section class="hero">
+  <p class="eyebrow reveal">Open source · Windows app · arXiv 2026</p>
+  <h1 class="reveal">A No-Code Toolchain for Validating<br>Wearable Motion Sensing Systems</h1>
+  <p class="authors reveal">Yao Zhang · Zhuchenyang Liu · Yu Xiao<span>Aalto University</span></p>
+  <p class="lead reveal">Film a person wearing your garment with an ordinary webcam while its sensors are logged. The toolchain turns the video into ground-truth motion, trains a model that reads that motion from the sensors alone, and tells you how well your garment works. No motion-capture lab, no code.</p>
+  <div class="cta reveal">
+    <a class="btn primary" href="https://github.com/yaozhang182/etextile-validation-gui/releases/latest"><span class="ic dl"></span>Download for Windows</a>
+    <a class="btn" href="https://arxiv.org/abs/2611.28027"><span class="ic doc"></span>Paper</a>
+    <a class="btn" href="https://github.com/yaozhang182/etextile-validation-gui"><span class="ic gh"></span>Code</a>
+    <a class="btn" href="https://github.com/yaozhang182/etextile-validation-gui/blob/main/docs/manual.md"><span class="ic book"></span>Manual</a>
+    <a class="btn" href="#video"><span class="ic play"></span>Tutorial video</a>
+  </div>
+  <figure class="film reveal">
+    <video id="heroV" src="media/hero.mp4" poster="media/hero.jpg" muted loop playsinline autoplay preload="auto"></video>
+    <figcaption>The test recording next to two skeletons: as tracked from the video, and with the arm the garment's sensors predicted, in red.</figcaption>
+  </figure>
+  <div class="facts">
+    <div class="fact reveal"><b data-count="10">10</b><span>minutes for one full validation cycle on a 4-core laptop CPU, no GPU</span></div>
+    <div class="fact reveal"><b data-count="4">4</b><span>minutes to retrain after changing targets or sensors; skeletons are cached</span></div>
+    <div class="fact reveal"><b data-count="2.3" data-dec="1">2.3</b><span>minutes median to repeat the whole workflow, in a study with 10 users</span></div>
+    <div class="fact reveal"><b data-count="0">0</b><span>lines of code, and one webcam as the only extra hardware</span></div>
+  </div>
+</section>
+
+<!-- ======================================================= setup -->
+<section class="band" id="setup">
+  <div class="wrap">
+    <p class="eyebrow reveal">What you need</p>
+    <h2 class="reveal">A garment, a webcam, a laptop.</h2>
+    <p class="sub reveal">Hover over a part of the setup to see what it does.</p>
+    <div class="setup reveal">
+      <div class="photo" id="setupPhoto">
+        <img src="media/paper/setup.jpg" alt="A seated person wearing a compression shirt with four flex sensors on the shoulder; a webcam on a laptop records them." loading="lazy">
+        <i class="ring" data-part="0" style="left:30%;top:40%;width:30%;height:17%"></i>
+        <i class="ring" data-part="1" style="left:30%;top:56%;width:20%;height:11%"></i>
+        <i class="ring" data-part="2" style="left:79%;top:70%;width:18%;height:13%"></i>
+        <i class="ring" data-part="3" style="left:46%;top:78%;width:54%;height:22%"></i>
+      </div>
+      <ol class="parts" id="setupParts">
+        <li data-part="0"><b>Sensors on a garment</b><span>Any channels you want to test: here four resistive flex sensors in fabric sleeves on a compression shirt, around the shoulder.</span></li>
+        <li data-part="1"><b>A microcontroller</b><span>Reads the sensors and sends each sample, stamped with the time, to the laptop.</span></li>
+        <li data-part="2"><b>A webcam</b><span>An ordinary USB or built-in camera filming the person. Its video becomes the ground truth.</span></li>
+        <li data-part="3"><b>A laptop</b><span>Logs the sensor CSV and the video with a timestamp for every frame, on the same clock. Afterwards it runs the toolchain.</span></li>
+      </ol>
+      <figure class="sensor">
+        <img src="media/paper/sensor.jpg" alt="Close-up of a flex sensor in a fabric sleeve sewn onto the shirt." loading="lazy">
+        <figcaption>A flex sensor in its fabric sleeve</figcaption>
+      </figure>
+    </div>
+    <h3 class="reveal">Then record the movements you care about</h3>
+    <div class="motions reveal" id="motions"></div>
+    <p class="note reveal">Photos from Liu, Zhang et al., EICS 2026 (CC BY), faces masked.</p>
+  </div>
+</section>
+
+<!-- ======================================================= pipeline -->
+<section class="band alt" id="pipeline">
+  <div class="wrap">
+    <p class="eyebrow reveal">How it works</p>
+    <h2 class="reveal">Three files in. A test report out.</h2>
+    <p class="sub reveal">Click a step.</p>
+    <div class="pipe reveal" id="pipe"></div>
+    <div class="pipe-card reveal" id="pipeCard" aria-live="polite"></div>
+  </div>
+</section>
+
+<!-- ======================================================= tutorial -->
+<section class="band" id="tutorial">
+  <div class="wrap">
+    <p class="eyebrow reveal">Interactive tutorial</p>
+    <h2 class="reveal">Six tabs, left to right.</h2>
+    <p class="sub reveal">Pick a tab, then click the numbered points on the screen.</p>
+    <div class="tb reveal">
+      <div class="tabs" id="tabList" role="tablist"></div>
+      <div class="screen">
+        <div class="stage" id="tabStage">
+          <img id="tabImg" alt="">
+          <video id="tabVid" muted loop playsinline hidden></video>
+          <div id="tabDots"></div>
+        </div>
+        <div class="tipcard" id="tabTip" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= targets -->
+<section class="band alt" id="targets">
+  <div class="wrap">
+    <p class="eyebrow reveal">What the model learns</p>
+    <h2 class="reveal">Pick bones, not channels.</h2>
+    <p class="sub reveal">In Tab 3 you click the bones the garment should sense. Each one adds where it points and the angle at its joint.</p>
+    <div class="tg-grid reveal">
+      <div class="picker card">
+        <svg id="bodySvg" viewBox="-0.55 -0.12 1.1 1.98" role="group" aria-label="Body outline; click a bone"></svg>
+        <p class="hint">Seen from the camera: the person's right is on the left.</p>
+      </div>
+      <div class="card bonecard" id="boneCard"></div>
+    </div>
+    <div class="arm card reveal">
+      <div class="arm-view">
+        <canvas id="armCanvas" width="520" height="440" aria-label="A figure raising its right arm"></canvas>
+        <div class="arm-ctl">
+          <label>Raise <input type="range" id="armRaise" min="0" max="180" value="70"><output id="armRaiseV">70°</output></label>
+          <label>Towards <input type="range" id="armAz" min="0" max="90" value="60"><output id="armAzV"></output></label>
+          <div class="presets"><button data-az="0">Forward</button><button data-az="90">To the side</button><button data-az="45">In between</button></div>
+        </div>
+      </div>
+      <div class="arm-plot">
+        <h4>Right upper arm, as the model sees it</h4>
+        <canvas id="armPlot" width="560" height="300"></canvas>
+        <div class="arm-read" id="armRead"></div>
+        <p class="hint">Elevation is how far the arm is raised, whichever way. Direction is a unit vector in the chest's frame: forward, up and outward. Both change smoothly however the arm moves, which is what makes them learnable.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= demo -->
+<section class="band" id="demo">
+  <div class="wrap">
+    <p class="eyebrow reveal">See a prediction</p>
+    <h2 class="reveal">The predicted arm, drawn into the skeleton.</h2>
+    <p class="sub reveal">Tab 5 of the app, running in your browser. Play, scrub, and drag a skeleton to turn both.</p>
+    <div class="demo card reveal" id="demoBox">
+      <div class="demo-top">
+        <video id="demoV" src="media/demo/session3.mp4" muted playsinline preload="auto"></video>
+        <div class="demo-3d">
+          <canvas id="demoC" aria-label="Two skeletons: tracked and predicted"></canvas>
+          <span class="lbl l">Tracked from the video</span><span class="lbl r">Predicted bones <i>red</i></span>
+        </div>
+      </div>
+      <div class="demo-bar">
+        <button class="round" id="demoPlay" aria-label="Play or pause"><span class="tri"></span></button>
+        <input type="range" id="demoSlider" min="0" value="0" aria-label="Frame">
+        <label class="tg"><input type="checkbox" id="demoGhost" checked><i></i>True position</label>
+      </div>
+      <div class="demo-read" id="demoRead"></div>
+    </div>
+    <p class="note reveal" id="demoNote">Example data: a model trained on three short practice recordings of one person, tested on a fourth. It shows what the view looks like, not how accurate a garment can be.</p>
+  </div>
+</section>
+
+<!-- ======================================================= layouts -->
+<section class="band alt" id="layouts">
+  <div class="wrap">
+    <p class="eyebrow reveal">In use</p>
+    <h2 class="reveal">Iterate on sensor layouts.</h2>
+    <p class="sub reveal">In our EICS 2026 study, three designers placed four flex sensors on the shoulder, tested each layout, and revised it. Every layout was scored the same way: the mean angle error of the predicted shoulder motion.</p>
+    <div class="ly reveal">
+      <div class="ly-ctl">
+        <div class="seg" id="lyDesigner"></div>
+        <div class="seg" id="lySeries"></div>
+      </div>
+      <div class="ly-row" id="lyRow"></div>
+      <p class="hint" id="lyHint"></p>
+    </div>
+    <p class="note reveal">Layouts from <a href="https://doi.org/10.1145/3816771">Liu, Zhang et al., Exploring Human-AI Collaboration in E-Textile Design, PACMHCI EICS 2026</a> (CC BY). Sensor 1 to 4 in dark red, orange, yellow and green; front and back of the right shoulder.</p>
+  </div>
+</section>
+
+<!-- ======================================================= study -->
+<section class="band" id="study">
+  <div class="wrap">
+    <p class="eyebrow reveal">User study</p>
+    <h2 class="reveal">Ten people, no help, first try.</h2>
+    <p class="sub reveal">Each participant imported two sessions, picked targets and inputs, trained a model and read the results, twice.</p>
+    <div class="study reveal">
+      <div class="card bars" id="studyBars">
+        <h4>Time for the whole workflow, median</h4>
+        <div class="row"><span>First time</span><div class="track"><i style="--w:100%"></i></div><b>7.8 min</b></div>
+        <div class="row"><span>Second time</span><div class="track"><i style="--w:29.5%" class="hot"></i></div><b>2.3 min</b></div>
+        <p class="hint">Every participant was faster the second time, by 65&nbsp;to&nbsp;72&nbsp;%.</p>
+      </div>
+      <div class="card sus">
+        <h4>System Usability Scale</h4>
+        <div class="gauge"><b data-count="64.8" data-dec="1">64.8</b><span>mean of 10; median 68.8</span></div>
+        <p class="hint">No link with programming experience: the three least experienced participants scored 67.5 to 72.5.</p>
+      </div>
+      <blockquote class="card quote">“No coding, all of the operations are GUI.”<cite>Study participant</cite></blockquote>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= start -->
+<section class="band alt" id="start">
+  <div class="wrap">
+    <p class="eyebrow reveal">Get started</p>
+    <h2 class="reveal">From download to first report.</h2>
+    <div class="steps3 reveal">
+      <div class="card step"><i>1</i><h4>Download</h4><p>Get the Windows build from the latest release, unzip it, and run <code>ETextileValidation.exe</code>. Example data is in the same release.</p>
+        <a class="btn small primary" href="https://github.com/yaozhang182/etextile-validation-gui/releases/latest">Latest release</a></div>
+      <div class="card step"><i>2</i><h4>Record</h4><p>Sync both computers' clocks, then record. Each session is three files: the video, the sensor CSV, and the time of every video frame. The repository includes the recording scripts.</p>
+        <a class="btn small" href="https://github.com/yaozhang182/etextile-validation-gui/blob/main/docs/manual.md#input-requirements">Input format</a></div>
+      <div class="card step"><i>3</i><h4>Run</h4><p>Add the sessions in Tab 1 and work left to right. The first extraction takes about 2.5 times the length of the video; everything after that is quick.</p>
+        <a class="btn small" href="#tutorial">Interactive tutorial</a></div>
+    </div>
+    <div class="files reveal">
+      <div class="ftabs" id="fileTabs"></div>
+      <pre class="code" id="fileCode"></pre>
+    </div>
+    <details class="card src reveal">
+      <summary>On macOS or Linux, or from source</summary>
+      <pre class="code copyable">git clone https://github.com/yaozhang182/etextile-validation-gui.git
+cd etextile-validation-gui
+pip install -r requirements.txt
+python app.py</pre>
+    </details>
+  </div>
+</section>
+
+<!-- ======================================================= video -->
+<section class="band" id="video">
+  <div class="wrap narrow">
+    <p class="eyebrow reveal">Detailed tutorial video</p>
+    <h2 class="reveal">Every tab and button, in six and a half minutes.</h2>
+    <div class="yt reveal" id="yt" data-id="JN8KxHRzAbk">
+      <img src="media/tutorial.jpg" alt="Tutorial video" loading="lazy">
+      <button class="bigplay" aria-label="Play the tutorial video"><span class="tri"></span></button>
+    </div>
+    <p class="note reveal">Plays from YouTube when you click. <a href="https://youtu.be/JN8KxHRzAbk">Open on YouTube</a>.</p>
+  </div>
+</section>
+
+<!-- ======================================================= cite -->
+<section class="band alt" id="cite">
+  <div class="wrap narrow">
+    <p class="eyebrow reveal">Cite</p>
+    <h2 class="reveal">If the toolchain helps your work.</h2>
+    <div class="bib card reveal">
+      <div class="bib-h"><b>A No-Code Toolchain for Validating Wearable Motion Sensing Systems</b><button class="btn small copy" data-copy="bib1">Copy BibTeX</button></div>
+<pre class="code" id="bib1">@misc{zhang2026nocode,
+  title         = {A No-Code Toolchain for Validating Wearable Motion Sensing Systems},
+  author        = {Zhang, Yao and Liu, Zhuchenyang and Xiao, Yu},
+  year          = {2026},
+  eprint        = {2611.28027},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.HC},
+  doi           = {10.48550/arXiv.2611.28027},
+  url           = {https://arxiv.org/abs/2611.28027}
+}</pre>
+    </div>
+    <div class="bib card reveal">
+      <div class="bib-h"><b>The layout study (EICS 2026)</b><button class="btn small copy" data-copy="bib2">Copy BibTeX</button></div>
+<pre class="code" id="bib2">@article{liu2026exploring,
+  title   = {Exploring Human-AI Collaboration in E-Textile Design: A Case Study
+             on Flex Sensor Placement for Shoulder Motion Detection},
+  author  = {Liu, Zhuchenyang and Zhang, Yao and He, Yalan and Paasio, Hilla
+             and Li, Changyi and Semjonova, Guna and Xiao, Yu},
+  journal = {Proceedings of the ACM on Human-Computer Interaction},
+  volume  = {10},
+  number  = {4},
+  articleno = {EICS019},
+  year    = {2026},
+  doi     = {10.1145/3816771}
+}</pre>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <p><b>E-Textile Validation</b> · Aalto University</p>
+    <p>Code under GPL-3.0, example data under CC BY 4.0. <a href="https://github.com/yaozhang182/etextile-validation-gui">GitHub</a> · <a href="https://github.com/yaozhang182/etextile-validation-gui/issues">Report a problem</a></p>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
