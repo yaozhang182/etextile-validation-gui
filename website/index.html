@@ -39,7 +39,11 @@
 
 <!-- ======================================================= hero -->
 <section class="hero">
-  <p class="eyebrow reveal">Open source · Windows app · arXiv 2026</p>
+  <button class="qr" id="qrBtn" aria-label="Show a large QR code for this page">
+    <img src="media/qr.svg" alt="QR code linking to this page">
+    <span>Scan to follow along<small>yaozhang182.github.io/etextile-validation-gui</small><small>Click for a bigger code</small></span>
+  </button>
+  <p class="eyebrow reveal">E-Textiles 2026</p>
   <h1 class="reveal">A No-Code Toolchain for Validating<br>Wearable Motion Sensing Systems</h1>
   <p class="authors reveal">Yao Zhang · Zhuchenyang Liu · Yu Xiao<span>Aalto University</span></p>
   <p class="lead reveal">Film a person wearing your garment with an ordinary webcam while its sensors are logged. The toolchain turns the video into ground-truth motion, trains a model that reads that motion from the sensors alone, and tells you how well your garment works. No motion-capture lab, no code.</p>
@@ -303,6 +307,14 @@ python app.py</pre>
     <p>Code under GPL-3.0, example data under CC BY 4.0. <a href="https://github.com/yaozhang182/etextile-validation-gui">GitHub</a> · <a href="https://github.com/yaozhang182/etextile-validation-gui/issues">Report a problem</a></p>
   </div>
 </footer>
+
+<div class="qr-full" id="qrFull" role="dialog" aria-modal="true" aria-label="QR code for this page" hidden>
+  <div class="qr-box">
+    <img src="media/qr.svg" alt="QR code linking to this page">
+    <b>yaozhang182.github.io/etextile-validation-gui</b>
+    <span>Scan to open this page on your phone</span>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>

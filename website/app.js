@@ -61,6 +61,18 @@
   }), { threshold: 0.25 });
   vio.observe($('#heroV'));
 
+  /* ------------------------------------------------------------ QR code */
+  // For talks: the hero shows a QR code; click it (or press Q) to fill the screen.
+  const qrFull = $('#qrFull');
+  const qr = show => { qrFull.hidden = !show; };
+  $('#qrBtn').addEventListener('click', () => qr(true));
+  qrFull.addEventListener('click', () => qr(false));
+  addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('input, textarea')) return;
+    if (e.key === 'Escape') qr(false);
+    else if ((e.key === 'q' || e.key === 'Q') && !e.metaKey && !e.ctrlKey && !e.altKey) qr(qrFull.hidden);
+  });
+
   /* ---------------------------------------------------------------- setup */
   const photo = $('#setupPhoto');
   const focusPart = k => {
