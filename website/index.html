@@ -25,7 +25,7 @@
 <header class="nav" id="nav">
   <a class="brand" href="#top"><span class="mark" aria-hidden="true"></span>E-Textile Validation</a>
   <nav class="links" aria-label="Sections">
-    <a href="#setup">Setup</a><a href="#pipeline">How it works</a><a href="#tutorial">Tutorial</a>
+    <a href="#why">Why</a><a href="#setup">Setup</a><a href="#pipeline">How it works</a><a href="#tutorial">Tutorial</a>
     <a href="#targets">Targets</a><a href="#demo">Demo</a><a href="#layouts">Layouts</a>
     <a href="#start">Get started</a><a href="#cite">Cite</a>
   </nav>
@@ -63,6 +63,35 @@
     <div class="fact reveal"><b data-count="4">4</b><span>minutes to retrain after changing targets or sensors; skeletons are cached</span></div>
     <div class="fact reveal"><b data-count="2.3" data-dec="1">2.3</b><span>minutes median to repeat the whole workflow, in a study with 10 users</span></div>
     <div class="fact reveal"><b data-count="0">0</b><span>lines of code, and one webcam as the only extra hardware</span></div>
+  </div>
+</section>
+
+<!-- ======================================================= why -->
+<section class="band alt" id="why">
+  <div class="wrap">
+    <p class="eyebrow reveal">Why</p>
+    <h2 class="reveal">The loop that makes a garment work.</h2>
+    <p class="sub reveal">A motion-sensing garment is developed in rounds: make it, test it, change it, again. The toolchain takes the engineer out of every round.</p>
+    <div class="seg loop-switch reveal" id="loopSwitch" role="tablist" aria-label="Before or with the toolchain">
+      <button type="button" data-mode="before">Today</button><button type="button" data-mode="after">With the toolchain</button>
+    </div>
+    <div class="loopbox reveal">
+      <div class="cycle" id="ring">
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="track" cx="50" cy="50" r="38"/>
+          <circle class="flow" cx="50" cy="50" r="38"/>
+          <circle class="runner" id="runner" r="2.2" cx="50" cy="12"/>
+        </svg>
+        <div id="ringNodes"></div>
+        <div class="cycle-center" id="ringCenter"></div>
+      </div>
+      <div class="loopside">
+        <h3 id="loopTitle"></h3>
+        <div class="stepcard" id="stepCard" aria-live="polite"></div>
+        <div class="cmp" id="loopCmp"></div>
+        <p class="hint">Click a step, or switch between the two loops.</p>
+      </div>
+    </div>
   </div>
 </section>
 

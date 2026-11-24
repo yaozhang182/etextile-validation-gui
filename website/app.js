@@ -73,6 +73,102 @@
     else if ((e.key === 'q' || e.key === 'Q') && !e.metaKey && !e.ctrlKey && !e.altKey) qr(qrFull.hidden);
   });
 
+  /* ------------------------------------------------------------ why: loop */
+  const LOOPS = {
+    before: {
+      title: 'Today: two people, a hand-over every round',
+      steps: [
+        { img: 'goal.png', t: 'Set the goal', s: 'e.g. sense the arm angle', e: 0,
+          d: 'The designer decides what the garment should sense, for example the angle of the arm.' },
+        { img: 'garment.png', t: 'Make sensors + garment', s: 'four sensors on a sleeve', e: 0,
+          d: 'She makes the sensors and the garment, say four sensors on a sleeve.' },
+        { img: 'signals.png', t: 'Collect data', s: 'sensor log + motion', e: 0,
+          d: 'Somebody moves while the sensors are logged and the motion is recorded.' },
+        { img: 'code.png', t: 'Write code, test it', s: 'new script for each garment', e: 1,
+          d: 'To know how well the garment works, an engineer writes code that turns the signals into motion and measures the error. For every new garment, again.' },
+        { img: 'change.png', t: 'Change the garment', s: 'move a sensor, start again', e: 0,
+          d: 'With the result, the designer moves a sensor, and the loop starts again.' },
+      ] },
+    after: {
+      title: 'With the toolchain: one person, one app',
+      steps: [
+        { img: 'change.png', t: 'Make or change the garment', s: 'sensors where you think they work', e: 0,
+          d: 'The designer makes the garment, or moves a sensor after the last round.' },
+        { img: 'record.svg', t: 'Record', s: 'webcam video + sensor log', e: 0,
+          d: 'She records two things at once: a webcam video and the sensor log. The video becomes the ground truth.' },
+        { img: 'look.svg', t: 'Look', s: 'sensors next to the motion', e: 0,
+          d: 'The app shows the sensor signals next to the motion from the video, so she sees at once whether the sensors react at all.' },
+        { img: 'train.svg', t: 'Train', s: 'built-in model, one click', e: 0,
+          d: 'One click trains the built-in model on her recordings, on an ordinary laptop.' },
+        { img: 'compare.svg', t: 'Compare', s: 'predicted vs. real arm', e: 0,
+          d: 'The arm predicted from the sensors is drawn next to the real arm, with the error in degrees. Not good enough? Change the garment and go round again, in minutes.' },
+      ] },
+  };
+  const CMP = [
+    ['People per round', '2: designer + engineer', '1: the designer'],
+    ['Code to write', 'a new script per garment', 'none'],
+    ['Between rounds', 'a hand-over, then waiting', 'minutes, on her own'],
+  ];
+  const ring = $('#ring'), nodesBox = $('#ringNodes'), center = $('#ringCenter'), runner = $('#runner');
+  let mode = 'before', step = 0, angle = -90, target = -90, autoT = null, hold = 0, ringVisible = false;
+  const angleOf = k => -90 + 72 * k;
+  function drawLoop() {
+    const L = LOOPS[mode];
+    $$('#loopSwitch button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+    nodesBox.innerHTML = '';
+    L.steps.forEach((st, k) => {
+      const a = angleOf(k) * Math.PI / 180;
+      const n = el('button', { type: 'button', class: 'rnode' + (st.e ? ' eng' : ''),
+        style: `left:${50 + 38 * Math.cos(a)}%;top:${50 + 38 * Math.sin(a)}%`, 'aria-label': st.t },
+        `<span class="pic"><img src="media/loop/${st.img}" alt=""></span><b>${st.t}</b>`);
+      n.addEventListener('click', () => { hold = performance.now() + 9000; setStep(k); });
+      nodesBox.append(n);
+    });
+    $('#loopTitle').textContent = L.title;
+    $('#loopCmp').innerHTML = `<div class="row"><span></span><span class="head">Today</span><span class="head">With the toolchain</span></div>` +
+      CMP.map(([k, a, b]) => `<div class="row"><span>${k}</span><span class="cell bad ${mode === 'before' ? 'on' : ''}">${a}</span><span class="cell ${mode === 'after' ? 'on' : ''}">${b}</span></div>`).join('');
+    setStep(0, true);
+  }
+  function setStep(k, jump) {
+    const L = LOOPS[mode], st = L.steps[k];
+    // always move forward round the ring, as the loop does
+    let t = angleOf(k);
+    while (t <= target - 1e-6 && !jump) t += 360;
+    if (jump) { t = angleOf(k); angle = t; }
+    target = t; step = k;
+    $$('.rnode', nodesBox).forEach((n, i) => n.classList.toggle('on', i === k));
+    const col = st.e ? '#d97a1a' : '#0066cc';
+    ring.style.setProperty('--d', mode === 'before' && st.e ? '#d97a1a' : '#0066cc');
+    $('#stepCard').innerHTML = `<i style="background:${col}">${k + 1}</i><b>${st.t}</b><p>${st.d}</p>
+      <span class="who" style="color:${col}">${st.e ? 'Engineer' : 'Designer'}${mode === 'after' ? ', alone, no code' : ''}</span>`;
+    if (mode === 'before') {
+      center.innerHTML = `<div class="who"><img src="media/loop/designer.png" alt="Designer" class="${st.e ? 'dim' : ''}">
+        <span class="swap ${st.e ? 'hot' : ''}">⇄</span><img src="media/loop/engineer.png" alt="Engineer" class="${st.e ? '' : 'dim'}"></div>
+        <small>Designer ⇄ Engineer</small>`;
+    } else {
+      center.innerHTML = `<div class="who"><img src="media/loop/designer.png" alt="Designer" style="width:46%"></div><small>Designer, alone, no code</small>`;
+    }
+  }
+  function animate() {
+    angle += (target - angle) * (reduced ? 1 : 0.08);
+    const a = angle * Math.PI / 180;
+    runner.setAttribute('cx', 50 + 38 * Math.cos(a)); runner.setAttribute('cy', 50 + 38 * Math.sin(a));
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+  function tickLoop() {
+    if (!ringVisible || performance.now() < hold) return;
+    if (step === LOOPS[mode].steps.length - 1) {     // a round done: show the other loop
+      mode = mode === 'before' ? 'after' : 'before'; drawLoop();
+    } else setStep(step + 1);
+  }
+  $$('#loopSwitch button').forEach(b => b.addEventListener('click', () => {
+    hold = performance.now() + 9000; mode = b.dataset.mode; drawLoop();
+  }));
+  new IntersectionObserver(es => es.forEach(e => { ringVisible = e.isIntersecting; }), { threshold: 0.35 }).observe(ring);
+  if (!reduced) autoT = setInterval(tickLoop, 2600);
+  drawLoop();
+
   /* ---------------------------------------------------------------- setup */
   const photo = $('#setupPhoto');
   const focusPart = k => {

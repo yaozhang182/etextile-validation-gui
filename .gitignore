@@ -69,3 +69,6 @@ docs/video/build/
 camera_ready_paper/
 review_screenshots/
 PACMHCI_EICS_2026.zip
+
+# talk slides (slide 3 uses another participant's recordings)
+NoCodeToolchain_ETextiles26*.pptx
