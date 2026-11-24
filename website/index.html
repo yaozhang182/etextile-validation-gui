@@ -41,12 +41,12 @@
 <section class="hero">
   <button class="qr" id="qrBtn" aria-label="Show a large QR code for this page">
     <img src="media/qr.svg" alt="QR code linking to this page">
-    <span>Scan to follow along<small>yaozhang182.github.io/etextile-validation-gui</small><small>Click for a bigger code</small></span>
+    <span>Scan to open this page<small>yaozhang182.github.io/etextile-validation-gui</small><small>Click to enlarge</small></span>
   </button>
   <p class="eyebrow reveal">E-Textiles 2026</p>
   <h1 class="reveal">A No-Code Toolchain for Validating<br>Wearable Motion Sensing Systems</h1>
   <p class="authors reveal">Yao Zhang · Zhuchenyang Liu · Yu Xiao<span>Aalto University</span></p>
-  <p class="lead reveal">Film a person wearing your garment with an ordinary webcam while its sensors are logged. The toolchain turns the video into ground-truth motion, trains a model that reads that motion from the sensors alone, and tells you how well your garment works. No motion-capture lab, no code.</p>
+  <p class="lead reveal">The toolchain derives joint motion from a webcam recording of a person wearing the garment, trains a model that predicts this motion from the garment's sensor data, and reports how accurately it does. It needs no motion-capture system and no programming.</p>
   <div class="cta reveal">
     <a class="btn primary" href="https://github.com/yaozhang182/etextile-validation-gui/releases/latest"><span class="ic dl"></span>Download for Windows</a>
     <a class="btn" href="https://arxiv.org/abs/2611.28027"><span class="ic doc"></span>Paper</a>
@@ -56,24 +56,24 @@
   </div>
   <figure class="film reveal">
     <video id="heroV" src="media/hero.mp4" poster="media/hero.jpg" muted loop playsinline autoplay preload="auto"></video>
-    <figcaption>The test recording next to two skeletons: as tracked from the video, and with the arm the garment's sensors predicted, in red.</figcaption>
+    <figcaption>Test recording (left), the skeleton tracked from it (middle), and the same skeleton with the arm predicted from the sensors in red (right).</figcaption>
   </figure>
   <div class="facts">
-    <div class="fact reveal"><b data-count="10">10</b><span>minutes for one full validation cycle on a 4-core laptop CPU, no GPU</span></div>
-    <div class="fact reveal"><b data-count="4">4</b><span>minutes to retrain after changing targets or sensors; skeletons are cached</span></div>
-    <div class="fact reveal"><b data-count="2.3" data-dec="1">2.3</b><span>minutes median to repeat the whole workflow, in a study with 10 users</span></div>
-    <div class="fact reveal"><b data-count="0">0</b><span>lines of code, and one webcam as the only extra hardware</span></div>
+    <div class="fact reveal"><b data-count="10">10</b><span>minutes for one validation cycle on a 4-core CPU, without GPU</span></div>
+    <div class="fact reveal"><b data-count="4">4</b><span>minutes to retrain after changing targets or sensors (skeletons are cached)</span></div>
+    <div class="fact reveal"><b data-count="2.3" data-dec="1">2.3</b><span>minutes (median) for the second run of the workflow in a user study with 10 participants</span></div>
+    <div class="fact reveal"><b data-count="0">0</b><span>lines of code; the only additional hardware is a webcam</span></div>
   </div>
 </section>
 
 <!-- ======================================================= why -->
 <section class="band alt" id="why">
   <div class="wrap">
-    <p class="eyebrow reveal">Why</p>
-    <h2 class="reveal">The loop that makes a garment work.</h2>
-    <p class="sub reveal">A motion-sensing garment is developed in rounds: make it, test it, change it, again. The toolchain takes the engineer out of every round.</p>
+    <p class="eyebrow reveal">Motivation</p>
+    <h2 class="reveal">The design loop of a motion-sensing garment</h2>
+    <p class="sub reveal">A garment is developed in iterations: build it, test it, change it. Testing usually requires an engineer to write code. With the toolchain, the designer carries out every step.</p>
     <div class="seg loop-switch reveal" id="loopSwitch" role="tablist" aria-label="Before or with the toolchain">
-      <button type="button" data-mode="before">Today</button><button type="button" data-mode="after">With the toolchain</button>
+      <button type="button" data-mode="before">Current practice</button><button type="button" data-mode="after">With the toolchain</button>
     </div>
     <div class="loopbox reveal">
       <div class="cycle" id="ring">
@@ -89,7 +89,7 @@
         <h3 id="loopTitle"></h3>
         <div class="stepcard" id="stepCard" aria-live="polite"></div>
         <div class="cmp" id="loopCmp"></div>
-        <p class="hint">Click a step, or switch between the two loops.</p>
+        <p class="hint">Click a step, or switch between the two versions of the loop.</p>
       </div>
     </div>
   </div>
@@ -98,9 +98,9 @@
 <!-- ======================================================= setup -->
 <section class="band" id="setup">
   <div class="wrap">
-    <p class="eyebrow reveal">What you need</p>
-    <h2 class="reveal">A garment, a webcam, a laptop.</h2>
-    <p class="sub reveal">Hover over a part of the setup to see what it does.</p>
+    <p class="eyebrow reveal">Setup</p>
+    <h2 class="reveal">Recording setup</h2>
+    <p class="sub reveal">A garment with sensors, a webcam and a laptop. Hover over a part for a description.</p>
     <div class="setup reveal">
       <div class="photo" id="setupPhoto">
         <img src="media/paper/setup.jpg" alt="A seated person wearing a compression shirt with four flex sensors on the shoulder; a webcam on a laptop records them." loading="lazy">
@@ -110,7 +110,7 @@
         <i class="ring" data-part="3" style="left:46%;top:78%;width:54%;height:22%"></i>
       </div>
       <ol class="parts" id="setupParts">
-        <li data-part="0"><b>Sensors on a garment</b><span>Any channels you want to test: here four resistive flex sensors in fabric sleeves on a compression shirt, around the shoulder.</span></li>
+        <li data-part="0"><b>Sensors on a garment</b><span>Any sensor channels. Here: four resistive flex sensors in fabric sleeves on a compression shirt, around the shoulder.</span></li>
         <li data-part="1"><b>A microcontroller</b><span>Reads the sensors and sends each sample, stamped with the time, to the laptop.</span></li>
         <li data-part="2"><b>A webcam</b><span>An ordinary USB or built-in camera filming the person. Its video becomes the ground truth.</span></li>
         <li data-part="3"><b>A laptop</b><span>Logs the sensor CSV and the video with a timestamp for every frame, on the same clock. Afterwards it runs the toolchain.</span></li>
@@ -120,7 +120,7 @@
         <figcaption>A flex sensor in its fabric sleeve</figcaption>
       </figure>
     </div>
-    <h3 class="reveal">Then record the movements you care about</h3>
+    <h3 class="reveal">Movements recorded in the EICS 2026 study</h3>
     <div class="motions reveal" id="motions"></div>
     <p class="note reveal">Photos from Liu, Zhang et al., EICS 2026 (CC BY), faces masked.</p>
   </div>
@@ -129,9 +129,9 @@
 <!-- ======================================================= pipeline -->
 <section class="band alt" id="pipeline">
   <div class="wrap">
-    <p class="eyebrow reveal">How it works</p>
-    <h2 class="reveal">Three files in. A test report out.</h2>
-    <p class="sub reveal">Click a step.</p>
+    <p class="eyebrow reveal">Method</p>
+    <h2 class="reveal">Processing steps</h2>
+    <p class="sub reveal">Each recording session consists of a video, a sensor CSV and a CSV with the time of every video frame. Click a step for details.</p>
     <div class="pipe reveal" id="pipe"></div>
     <div class="pipe-card reveal" id="pipeCard" aria-live="polite"></div>
   </div>
@@ -140,9 +140,9 @@
 <!-- ======================================================= tutorial -->
 <section class="band" id="tutorial">
   <div class="wrap">
-    <p class="eyebrow reveal">Interactive tutorial</p>
-    <h2 class="reveal">Six tabs, left to right.</h2>
-    <p class="sub reveal">Pick a tab, then click the numbered points on the screen.</p>
+    <p class="eyebrow reveal">Tutorial</p>
+    <h2 class="reveal">The six tabs of the application</h2>
+    <p class="sub reveal">Select a tab, then click the numbered points on the screenshot.</p>
     <div class="tb reveal">
       <div class="tabs" id="tabList" role="tablist"></div>
       <div class="screen">
@@ -160,9 +160,9 @@
 <!-- ======================================================= targets -->
 <section class="band alt" id="targets">
   <div class="wrap">
-    <p class="eyebrow reveal">What the model learns</p>
-    <h2 class="reveal">Pick bones, not channels.</h2>
-    <p class="sub reveal">In Tab 3 you click the bones the garment should sense. Each one adds where it points and the angle at its joint.</p>
+    <p class="eyebrow reveal">Regression targets</p>
+    <h2 class="reveal">Selecting targets by bone</h2>
+    <p class="sub reveal">In Tab 3, targets are selected by clicking bones. An arm or leg bone adds its direction and the angle of the joint at its end.</p>
     <div class="tg-grid reveal">
       <div class="picker card">
         <svg id="bodySvg" viewBox="-0.55 -0.12 1.1 1.98" role="group" aria-label="Body outline; click a bone"></svg>
@@ -189,9 +189,9 @@
 <!-- ======================================================= demo -->
 <section class="band" id="demo">
   <div class="wrap">
-    <p class="eyebrow reveal">See a prediction</p>
-    <h2 class="reveal">The predicted arm, drawn into the skeleton.</h2>
-    <p class="sub reveal">Tab 5 of the app, running in your browser. Play, scrub, and drag a skeleton to turn both.</p>
+    <p class="eyebrow reveal">Example</p>
+    <h2 class="reveal">Predicted arm in the tracked skeleton</h2>
+    <p class="sub reveal">A browser version of Tab 5 on example session 3. Drag a skeleton to rotate both views.</p>
     <div class="demo card reveal" id="demoBox">
       <div class="demo-top">
         <video id="demoV" src="media/demo/session3.mp4" muted playsinline preload="auto"></video>
@@ -207,15 +207,15 @@
       </div>
       <div class="demo-read" id="demoRead"></div>
     </div>
-    <p class="note reveal" id="demoNote">Example data: a model trained on three short practice recordings of one person, tested on a fourth. It shows what the view looks like, not how accurate a garment can be.</p>
+    <p class="note reveal" id="demoNote">Example data: a model trained on three short recordings of one person and tested on a fourth. The errors shown are not a measure of garment accuracy.</p>
   </div>
 </section>
 
 <!-- ======================================================= layouts -->
 <section class="band alt" id="layouts">
   <div class="wrap">
-    <p class="eyebrow reveal">In use</p>
-    <h2 class="reveal">Iterate on sensor layouts.</h2>
+    <p class="eyebrow reveal">Application</p>
+    <h2 class="reveal">Comparing sensor layouts</h2>
     <p class="sub reveal">In our EICS 2026 study, three designers placed four flex sensors on the shoulder, tested each layout, and revised it. Every layout was scored the same way: the mean angle error of the predicted shoulder motion.</p>
     <div class="ly reveal">
       <div class="ly-ctl">
@@ -233,7 +233,7 @@
 <section class="band" id="study">
   <div class="wrap">
     <p class="eyebrow reveal">User study</p>
-    <h2 class="reveal">Ten people, no help, first try.</h2>
+    <h2 class="reveal">User study with 10 participants</h2>
     <p class="sub reveal">Each participant imported two sessions, picked targets and inputs, trained a model and read the results, twice.</p>
     <div class="study reveal">
       <div class="card bars" id="studyBars">
@@ -245,7 +245,7 @@
       <div class="card sus">
         <h4>System Usability Scale</h4>
         <div class="gauge"><b data-count="64.8" data-dec="1">64.8</b><span>mean of 10; median 68.8</span></div>
-        <p class="hint">No link with programming experience: the three least experienced participants scored 67.5 to 72.5.</p>
+        <p class="hint">Scores did not depend on programming experience (Spearman ρ = −0.19, p = 0.60).</p>
       </div>
       <blockquote class="card quote">“No coding, all of the operations are GUI.”<cite>Study participant</cite></blockquote>
     </div>
@@ -256,13 +256,13 @@
 <section class="band alt" id="start">
   <div class="wrap">
     <p class="eyebrow reveal">Get started</p>
-    <h2 class="reveal">From download to first report.</h2>
+    <h2 class="reveal">Installation and first use</h2>
     <div class="steps3 reveal">
       <div class="card step"><i>1</i><h4>Download</h4><p>Get the Windows build from the latest release, unzip it, and run <code>ETextileValidation.exe</code>. Example data is in the same release.</p>
         <a class="btn small primary" href="https://github.com/yaozhang182/etextile-validation-gui/releases/latest">Latest release</a></div>
       <div class="card step"><i>2</i><h4>Record</h4><p>Sync both computers' clocks, then record. Each session is three files: the video, the sensor CSV, and the time of every video frame. The repository includes the recording scripts.</p>
         <a class="btn small" href="https://github.com/yaozhang182/etextile-validation-gui/blob/main/docs/manual.md#input-requirements">Input format</a></div>
-      <div class="card step"><i>3</i><h4>Run</h4><p>Add the sessions in Tab 1 and work left to right. The first extraction takes about 2.5 times the length of the video; everything after that is quick.</p>
+      <div class="card step"><i>3</i><h4>Run</h4><p>Add the sessions in Tab 1 and work left to right. Pose extraction takes about 2.5 times the length of the video and runs once per recording.</p>
         <a class="btn small" href="#tutorial">Interactive tutorial</a></div>
     </div>
     <div class="files reveal">
@@ -282,8 +282,8 @@ python app.py</pre>
 <!-- ======================================================= video -->
 <section class="band" id="video">
   <div class="wrap narrow">
-    <p class="eyebrow reveal">Detailed tutorial video</p>
-    <h2 class="reveal">Every tab and button, in six and a half minutes.</h2>
+    <p class="eyebrow reveal">Video</p>
+    <h2 class="reveal">Tutorial video (6.5 min)</h2>
     <div class="yt reveal" id="yt" data-id="JN8KxHRzAbk">
       <img src="media/tutorial.jpg" alt="Tutorial video" loading="lazy">
       <button class="bigplay" aria-label="Play the tutorial video"><span class="tri"></span></button>
@@ -296,7 +296,7 @@ python app.py</pre>
 <section class="band alt" id="cite">
   <div class="wrap narrow">
     <p class="eyebrow reveal">Cite</p>
-    <h2 class="reveal">If the toolchain helps your work.</h2>
+    <h2 class="reveal">BibTeX</h2>
     <div class="bib card reveal">
       <div class="bib-h"><b>A No-Code Toolchain for Validating Wearable Motion Sensing Systems</b><button class="btn small copy" data-copy="bib1">Copy BibTeX</button></div>
 <pre class="code" id="bib1">@misc{zhang2026nocode,
@@ -341,7 +341,7 @@ python app.py</pre>
   <div class="qr-box">
     <img src="media/qr.svg" alt="QR code linking to this page">
     <b>yaozhang182.github.io/etextile-validation-gui</b>
-    <span>Scan to open this page on your phone</span>
+    <span>Scan to open this page</span>
   </div>
 </div>
 

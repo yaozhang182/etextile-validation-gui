@@ -76,7 +76,7 @@
   /* ------------------------------------------------------------ why: loop */
   const LOOPS = {
     before: {
-      title: 'Today: two people, a hand-over every round',
+      title: 'Current practice: designer and engineer',
       steps: [
         { img: 'goal.png', t: 'Set the goal', s: 'e.g. sense the arm angle', e: 0,
           d: 'The designer decides what the garment should sense, for example the angle of the arm.' },
@@ -85,29 +85,29 @@
         { img: 'signals.png', t: 'Collect data', s: 'sensor log + motion', e: 0,
           d: 'Somebody moves while the sensors are logged and the motion is recorded.' },
         { img: 'code.png', t: 'Write code, test it', s: 'new script for each garment', e: 1,
-          d: 'To know how well the garment works, an engineer writes code that turns the signals into motion and measures the error. For every new garment, again.' },
+          d: 'An engineer writes code that converts the signals into motion and measures the error. This is repeated for every new garment.' },
         { img: 'change.png', t: 'Change the garment', s: 'move a sensor, start again', e: 0,
-          d: 'With the result, the designer moves a sensor, and the loop starts again.' },
+          d: 'Based on the result, the designer moves a sensor and the next iteration starts.' },
       ] },
     after: {
-      title: 'With the toolchain: one person, one app',
+      title: 'With the toolchain: designer only',
       steps: [
         { img: 'change.png', t: 'Make or change the garment', s: 'sensors where you think they work', e: 0,
           d: 'The designer makes the garment, or moves a sensor after the last round.' },
         { img: 'record.svg', t: 'Record', s: 'webcam video + sensor log', e: 0,
-          d: 'She records two things at once: a webcam video and the sensor log. The video becomes the ground truth.' },
+          d: 'She records a webcam video and the sensor log at the same time. The video provides the ground truth.' },
         { img: 'look.svg', t: 'Look', s: 'sensors next to the motion', e: 0,
-          d: 'The app shows the sensor signals next to the motion from the video, so she sees at once whether the sensors react at all.' },
+          d: 'The app plots the sensor signals next to the motion from the video, which shows whether the sensors respond to the movement.' },
         { img: 'train.svg', t: 'Train', s: 'built-in model, one click', e: 0,
-          d: 'One click trains the built-in model on her recordings, on an ordinary laptop.' },
+          d: 'She trains the built-in model on the recordings with one click, on a laptop CPU.' },
         { img: 'compare.svg', t: 'Compare', s: 'predicted vs. real arm', e: 0,
-          d: 'The arm predicted from the sensors is drawn next to the real arm, with the error in degrees. Not good enough? Change the garment and go round again, in minutes.' },
+          d: 'The app draws the arm predicted from the sensors next to the tracked arm and reports the error in degrees. If the error is too large, she changes the garment and starts the next iteration.' },
       ] },
   };
   const CMP = [
-    ['People per round', '2: designer + engineer', '1: the designer'],
-    ['Code to write', 'a new script per garment', 'none'],
-    ['Between rounds', 'a hand-over, then waiting', 'minutes, on her own'],
+    ['People involved', '2: designer and engineer', '1: designer'],
+    ['Code to write', 'new code for each garment', 'none'],
+    ['Between iterations', 'hand-over to the engineer', 'none'],
   ];
   const ring = $('#ring'), nodesBox = $('#ringNodes'), center = $('#ringCenter'), runner = $('#runner');
   let mode = 'before', step = 0, angle = -90, target = -90, autoT = null, hold = 0, ringVisible = false;
@@ -125,7 +125,7 @@
       nodesBox.append(n);
     });
     $('#loopTitle').textContent = L.title;
-    $('#loopCmp').innerHTML = `<div class="row"><span></span><span class="head">Today</span><span class="head">With the toolchain</span></div>` +
+    $('#loopCmp').innerHTML = `<div class="row"><span></span><span class="head">Current practice</span><span class="head">With the toolchain</span></div>` +
       CMP.map(([k, a, b]) => `<div class="row"><span>${k}</span><span class="cell bad ${mode === 'before' ? 'on' : ''}">${a}</span><span class="cell ${mode === 'after' ? 'on' : ''}">${b}</span></div>`).join('');
     setStep(0, true);
   }
@@ -196,21 +196,21 @@
       d: 'MediaPipe finds 33 body landmarks in every frame. They become a 22-joint skeleton, and each joint keeps the tracker\'s own confidence.',
       li: ['About 0.08 s per frame on a laptop CPU', 'Cached next to the video: done once per recording'],
       img: 'media/tabs/tab2.jpg' },
-    { n: 'Describe', tab: 'Tab 3', s: 'what to predict',
-      d: 'From the skeleton, every frame gets the quantities a model can learn: where each limb points, how far it is raised, and the hinge angles of elbow and knee.',
-      li: ['Directions are unit vectors in the body\'s frame', 'They change smoothly in every pose, so they are learnable'],
+    { n: 'Targets', tab: 'Tab 3', s: 'what to predict',
+      d: 'For every frame, the skeleton gives the regression targets: limb directions, how far each limb is raised, and the elbow and knee angles.',
+      li: ['Directions are unit vectors in the body\'s frame', 'All targets are continuous in every pose'],
       img: 'media/tabs/tab3.jpg' },
     { n: 'Align', tab: 'Tab 4', s: 'one clock for both',
       d: 'The sensor stream is interpolated onto the time of each video frame, over the window both recordings cover. Each session is windowed on its own, so no sample spans two recordings.',
       li: ['Works with any sensor rate', 'Sessions that do not overlap are reported, not dropped silently'],
       img: 'media/tabs/tab4.jpg' },
-    { n: 'Learn', tab: 'Tab 4', s: 'sensors → motion',
-      d: 'A small CNN-LSTM learns to predict the chosen targets from a short history of sensor readings. It trains on the CPU in minutes.',
-      li: ['Defaults work; every setting is explained in place', 'Retraining reuses the cached skeletons'],
+    { n: 'Train', tab: 'Tab 4', s: 'sensors → motion',
+      d: 'A CNN-LSTM is trained to predict the selected targets from a short window of sensor readings. Training runs on the CPU and takes a few minutes.',
+      li: ['Default settings are provided; each setting has a help text', 'Retraining reuses the cached skeletons'],
       img: 'media/tabs/tab4.jpg' },
-    { n: 'Report', tab: 'Tab 5–6', s: 'how well it works',
-      d: 'On recordings held back from training: the error of every target, prediction against truth over time, the predicted limb drawn into the skeleton, and which sensors the model relied on.',
-      li: ['Export the metrics, a text report and all plots', 'Sensor importance points at channels to keep or move'],
+    { n: 'Report', tab: 'Tab 5–6', s: 'errors and plots',
+      d: 'On the test recordings: the error of every target, predicted and true values over time, the predicted limb drawn into the skeleton, and the importance of each sensor.',
+      li: ['Metrics, a text report and all plots can be exported', 'Sensor importance indicates which channels the model uses'],
       img: 'media/tabs/tab5.jpg' },
   ];
   const pipe = $('#pipe'), pcard = $('#pipeCard');
@@ -241,29 +241,29 @@
       todo: ['Scrub through each recording', 'Look for limbs turning red', 'Open Tracking Quality for a summary'],
       h: { skeleton: ['Video and skeleton together', 'The skeleton follows the slider. Each joint is coloured by how confident the tracker was: green is reliable, red means that part of the body was probably hidden.'],
            tq: ['Tracking Quality', 'Lists the least reliable landmarks and targets of the recording, so you know which results to read with care.'] } },
-    { t: 'Angles & Sensors', s: 'decide what to learn', vid: 'media/loop_tab3.mp4',
+    { t: 'Angles & Sensors', s: 'targets and inputs', vid: 'media/loop_tab3.mp4',
       todo: ['Click the bones to predict', 'Keep the sensor channels you want to test', 'Play the video to see if a sensor follows the movement'],
       h: { angles: ['Targets', 'Click a bone on the body outline: the upper arm adds its direction and the shoulder elevation, the forearm adds its direction and the elbow angle. The List view shows every target by name.'],
            sensors: ['Sensor channels', 'The garment channels the model may use. Only channels present in every session are offered.'],
            plots: ['One clock for everything', 'Targets above, sensors below, on a shared time axis. The red line follows the video, and the values at that moment are listed above it.'],
            info: ['The usable window', 'Only the time both recordings cover is used for training.'] } },
-    { t: 'Training', s: 'one button', vid: null,
-      todo: ['Check the summary', 'Leave the defaults', 'Press Start Training'],
+    { t: 'Training', s: 'train a model', vid: null,
+      todo: ['Check the summary', 'Keep the default settings', 'Press Start Training'],
       h: { summary: ['What will be trained', 'Sessions, targets and inputs, as chosen in Tabs 1 and 3.'],
            hyper: ['Settings', 'All have working defaults. The question marks explain the less obvious ones, symptom first.'],
            start: ['Start Training', 'Trains on the CPU with a progress window, then scores the model on the test sessions.'],
            loss: ['Loss curve', 'Should fall and flatten. If it is still falling at the end, raise the epochs.'] } },
-    { t: 'Pose', s: 'see the prediction', vid: 'media/loop_tab5.mp4',
-      todo: ['Play the test recording', 'Watch where the red bones drift', 'Drag a skeleton to look from the side'],
-      h: { pred_ax: ['Predicted bones, in red', 'Each predicted bone starts at the true joint with its true length and points where the model said. The number at its end is the error in degrees; the grey dashed line is where it really was.'],
+    { t: 'Pose', s: 'predicted poses', vid: 'media/loop_tab5.mp4',
+      todo: ['Play the test recording', 'Compare the red bones with the tracked ones', 'Drag a skeleton to view it from the side'],
+      h: { pred_ax: ['Predicted bones, in red', 'Each predicted bone starts at the tracked joint, has the tracked length and points in the predicted direction. The number at its end is the error in degrees; the grey dashed line shows the tracked position.'],
            ghost: ['True position', 'Shows or hides the grey ghost of each predicted bone.'],
            scrub: ['One slider', 'Moves the video and both skeletons. Dragging either skeleton turns both.'],
            values: ['This moment, in numbers', 'For a direction, how far off it is; for an angle, the predicted and the true value.'] } },
-    { t: 'Results', s: 'read the numbers', vid: null,
+    { t: 'Results', s: 'metrics and export', vid: null,
       todo: ['Read the per-subject table first', 'Check the tracking-confidence column', 'Export the report'],
       h: { headline: ['Four numbers', 'Mean error and RMSE in degrees, error as a share of the range of motion, and the correlation with the truth.'],
            table: ['Per target', 'The same numbers for each target, plus how well its ground truth was tracked: a large error on a poorly tracked target says more about the video than the garment.'],
-           pred: ['Prediction against truth', 'Over the whole test recording: offsets, drift, or a movement the sensors miss. Further down: sensor importance and the exports.'] } },
+           pred: ['Prediction and ground truth', 'Predicted and true values over the whole test recording. Further down: sensor importance and the export buttons.'] } },
   ];
   const tabList = $('#tabList'), img = $('#tabImg'), vid = $('#tabVid'), dots = $('#tabDots'), tip = $('#tabTip');
   vid.dataset.manual = '1';
@@ -315,7 +315,7 @@
     18: [.30, 1.17], 19: [-.30, 1.17], 20: [.40, .94], 21: [-.40, .94] };
   const T_INFO = {
     upper_arm_direction: 'where the upper arm points: a unit vector forward, up, outward in the chest\'s frame',
-    shoulder_elevation: 'how far the arm is raised from hanging, 0 to 180°, whichever way',
+    shoulder_elevation: 'how far the arm is raised from hanging, 0 to 180°, in any direction',
     forearm_direction: 'where the forearm points; with the upper arm it fixes the elbow bend and the shoulder\'s rotation',
     elbow_flexion: 'how far the elbow is bent, 0° straight',
     thigh_direction: 'where the thigh points, in the pelvis\'s frame',
@@ -390,7 +390,7 @@
     }));
     const n = rows.length;
     card.innerHTML = `<h4>${names.map(b => BONES[b][0]).join(' + ')}</h4>
-      <p class="hint">${n} target${n > 1 ? 's' : ''} the model will learn from the sensors. Directions can be drawn back into the skeleton in Tab 5; angles are listed as numbers.</p>
+      <p class="hint">${n} target${n > 1 ? 's' : ''}. Tab 5 draws the directions into the skeleton and lists the angles as numbers.</p>
       <ul class="tlist">${rows.join('')}</ul>`;
   }
   paintBones(); showBoneCard();
@@ -428,22 +428,22 @@
       angle: ['shoulder elevation', ps => ps.uaRaise], vec: 'ua', sweep: 'uaRaise', range: [0, 180],
       ctl: [['Raise', 'uaRaise', 0, 180], ['Towards', 'uaAz', 0, 90, { 0: 'front', 90: 'side' }]],
       presets: [['Forward', { uaAz: 0 }], ['To the side', { uaAz: 90 }], ['In between', { uaAz: 45 }]],
-      hint: 'Elevation is how far the arm is raised, whichever way. The direction is a unit vector in the chest\'s frame: forward, up and outward. Both change smoothly however the arm moves.' },
+      hint: 'Elevation is how far the arm is raised from hanging, in any direction. The direction is a unit vector in the chest frame (forward, up, outward). Both are continuous in every pose.' },
     forearm: { label: 'Forearm', joint: 'elbow', frame: 'chest',
       angle: ['elbow flexion', ps => ps.elBend], vec: 'fa', sweep: 'elBend', range: [0, 150],
       ctl: [['Bend', 'elBend', 0, 150], ['Twist', 'elTwist', -90, 90, { 0: 'none' }]],
       presets: [['Arm down', { uaRaise: 5, uaAz: 60 }], ['Arm forward', { uaRaise: 90, uaAz: 0 }], ['Arm to the side', { uaRaise: 90, uaAz: 90 }]],
-      hint: 'Elbow flexion is how far the elbow is bent. The forearm\'s direction, also in the chest\'s frame, adds what the angle cannot: twisting the upper arm swings the forearm round while the elbow angle stays the same.' },
+      hint: 'Elbow flexion is how far the elbow is bent. The forearm direction, also in the chest frame, changes when the upper arm twists, while the elbow angle stays the same.' },
     thigh: { label: 'Thigh', joint: 'hip', frame: 'pelvis',
       angle: ['hip elevation', ps => ps.thRaise], vec: 'th', sweep: 'thRaise', range: [0, 120],
       ctl: [['Raise', 'thRaise', 0, 120], ['Towards', 'thAz', 0, 60, { 0: 'front' }]],
       presets: [['Forward', { thAz: 0 }], ['Out to the side', { thAz: 60 }]],
-      hint: 'Hip elevation is how far the thigh is raised from hanging. The direction is a unit vector in the pelvis\'s frame, so it reads the same whichever way the person faces.' },
+      hint: 'Hip elevation is how far the thigh is raised from hanging. The direction is a unit vector in the pelvis frame, so it does not depend on which way the person faces.' },
     shank: { label: 'Shank', joint: 'knee', frame: 'pelvis',
       angle: ['knee flexion', ps => ps.knBend], vec: 'sh', sweep: 'knBend', range: [0, 150],
       ctl: [['Bend', 'knBend', 0, 150]],
       presets: [['Standing', { thRaise: 0 }], ['Sitting', { thRaise: 90, thAz: 0 }]],
-      hint: 'Knee flexion is how far the knee is bent. The shank\'s direction in the pelvis\'s frame tells sitting from standing even at the same knee angle.' },
+      hint: 'Knee flexion is how far the knee is bent. The shank direction in the pelvis frame differs between sitting and standing at the same knee angle.' },
   };
   let cur = 'upper_arm';
   const armBones = $('#armBones'), armCtl = $('#armCtl');
@@ -470,7 +470,7 @@
       pr.append(b);
     });
     armCtl.append(pr);
-    $('#armTitle').textContent = `Right ${L.label.toLowerCase()}, as the model sees it`;
+    $('#armTitle').textContent = `Targets of the right ${L.label.toLowerCase()}`;
     $('#armHint').textContent = L.hint;
     limbUpdate();
   }
