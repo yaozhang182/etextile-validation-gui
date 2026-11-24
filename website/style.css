@@ -147,7 +147,12 @@ h4{margin:0 0 12px;font-size:16px;letter-spacing:-.01em}
 .tg-grid{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:24px;margin-top:36px}
 .picker{padding:18px 18px 14px}
 .picker svg{width:100%;max-height:420px;margin:0 auto}
-.picker .bone{stroke-linecap:round;cursor:pointer;transition:stroke .2s}
+.picker .bone{stroke-linecap:round;cursor:pointer;transition:stroke .2s,stroke-width .2s;outline:none}
+/* a focus ring is drawn in screen pixels, which inside the scaled-up viewBox
+   becomes a ring hundreds of times too large: show focus with the stroke */
+.picker .bone:focus{outline:none}
+.picker .bone:focus-visible{stroke:var(--warm)!important}
+.picker svg{-webkit-tap-highlight-color:transparent}
 .picker .halo{stroke:var(--acc);stroke-linecap:round;opacity:0;transition:opacity .25s;pointer-events:none}
 .picker .halo.on{opacity:.55}
 .picker .joint{fill:var(--mute)}
@@ -162,6 +167,7 @@ h4{margin:0 0 12px;font-size:16px;letter-spacing:-.01em}
 .arm{margin-top:24px;padding:22px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:26px;align-items:center}
 .arm-view canvas{width:100%;height:auto;border-radius:16px;background:var(--bg2);cursor:grab}
 .arm-ctl{display:grid;gap:10px;margin-top:14px}
+.arm-pick{margin-bottom:12px}
 .arm-ctl label{display:grid;grid-template-columns:78px 1fr 52px;gap:10px;align-items:center;font-size:14px;font-weight:600}
 .arm-ctl output{font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--sub);text-align:right}
 input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:999px;background:var(--line);outline:none;width:100%}

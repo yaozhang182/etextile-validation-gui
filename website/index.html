@@ -139,18 +139,15 @@
     </div>
     <div class="arm card reveal">
       <div class="arm-view">
-        <canvas id="armCanvas" width="520" height="440" aria-label="A figure raising its right arm"></canvas>
-        <div class="arm-ctl">
-          <label>Raise <input type="range" id="armRaise" min="0" max="180" value="70"><output id="armRaiseV">70°</output></label>
-          <label>Towards <input type="range" id="armAz" min="0" max="90" value="60"><output id="armAzV"></output></label>
-          <div class="presets"><button data-az="0">Forward</button><button data-az="90">To the side</button><button data-az="45">In between</button></div>
-        </div>
+        <div class="seg arm-pick" id="armBones" role="tablist" aria-label="Which bone"></div>
+        <canvas id="armCanvas" width="520" height="440" aria-label="A figure moving one limb"></canvas>
+        <div class="arm-ctl" id="armCtl"></div>
       </div>
       <div class="arm-plot">
-        <h4>Right upper arm, as the model sees it</h4>
+        <h4 id="armTitle"></h4>
         <canvas id="armPlot" width="560" height="300"></canvas>
         <div class="arm-read" id="armRead"></div>
-        <p class="hint">Elevation is how far the arm is raised, whichever way. Direction is a unit vector in the chest's frame: forward, up and outward. Both change smoothly however the arm moves, which is what makes them learnable.</p>
+        <p class="hint" id="armHint"></p>
       </div>
     </div>
   </div>

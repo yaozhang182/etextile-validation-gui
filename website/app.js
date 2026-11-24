@@ -262,9 +262,11 @@
       line.style.stroke = on ? css('--acc') : css('--mute');
     }
   }
+  let showLimbFor = () => {};
   function pickBone(name) {
     picked.has(name) ? picked.delete(name) : picked.add(name);
     paintBones(); showBoneCard(name);
+    if (picked.has(name)) showLimbFor(name);
   }
   function showBoneCard(last) {
     const card = $('#boneCard');
@@ -286,25 +288,91 @@
   paintBones(); showBoneCard();
   redrawers.push(paintBones);
 
-  /* ---- the arm demo: raise the right arm, watch elevation and direction */
+  /* ---- the limb demo: move one bone of the right side, watch its targets */
   const armC = $('#armCanvas'), plotC = $('#armPlot');
-  const raise = $('#armRaise'), az = $('#armAz');
   let yaw = -0.5, pitch = 0.18;
-  const BODY = { 0: [0, .95, 0], 1: [.09, .87, 0], 2: [-.09, .87, 0], 4: [.10, .48, .02], 5: [-.10, .48, .02], 7: [.10, .08, 0], 8: [-.10, .08, 0],
-    10: [.12, .02, .13], 11: [-.12, .02, .13], 12: [0, 1.47, 0], 15: [0, 1.62, .05], 16: [.18, 1.42, 0], 17: [-.18, 1.42, 0],
-    18: [.21, 1.14, 0], 20: [.22, .88, .03] };
-  const LINKS = [[0, 1], [0, 2], [1, 4], [4, 7], [7, 10], [2, 5], [5, 8], [8, 11], [0, 12], [12, 15], [12, 16], [12, 17], [16, 18], [18, 20]];
-  function dirOf(r, a) {         // body frame (forward, up, outward)
-    const R = r * Math.PI / 180, A = a * Math.PI / 180;
-    return [Math.sin(R) * Math.cos(A), -Math.cos(R), Math.sin(R) * Math.sin(A)];
+  // the posed right side; everything else stands still
+  const pose = { uaRaise: 70, uaAz: 60, elBend: 60, elTwist: 0, thRaise: 30, thAz: 0, knBend: 40 };
+  const DEG = Math.PI / 180;
+  const add = (a, b, k = 1) => a.map((v, i) => v + k * b[i]);
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = a => { const n = Math.hypot(...a) || 1; return a.map(v => v / n); };
+  const rotAbout = (v, k, t) => add(add(v.map(x => x * Math.cos(t)), cross(k, v).map(x => x * Math.sin(t))), k, dot(k, v) * (1 - Math.cos(t)));
+  // body frame of the limb's parent: (forward, up, outward)
+  const FWD = [1, 0, 0], UP = [0, 1, 0], OUT = [0, 0, 1];
+  function dirOf(r, a) { return [Math.sin(r * DEG) * Math.cos(a * DEG), -Math.cos(r * DEG), Math.sin(r * DEG) * Math.sin(a * DEG)]; }
+  function bent(u, bend, twist, forward) {
+    // a hinge bending `bend` degrees away from u: the elbow folds the forearm
+    // forward, the knee folds the shank back; twist turns the bending plane
+    let p = cross(OUT, u);
+    if (Math.hypot(...p) < 1e-3) p = FWD;
+    p = norm(p).map(v => forward ? v : -v);
+    p = rotAbout(p, u, twist * DEG);
+    return norm(add(u.map(v => v * Math.cos(bend * DEG)), p, Math.sin(bend * DEG)));
+  }
+  function limbs(ps) {
+    const ua = dirOf(ps.uaRaise, ps.uaAz), th = dirOf(ps.thRaise, ps.thAz);
+    return { ua, fa: bent(ua, ps.elBend, ps.elTwist, true), th, sh: bent(th, ps.knBend, 0, false) };
+  }
+  const LIMB = {
+    upper_arm: { label: 'Upper arm', joint: 'shoulder', frame: 'chest',
+      angle: ['shoulder elevation', ps => ps.uaRaise], vec: 'ua', sweep: 'uaRaise', range: [0, 180],
+      ctl: [['Raise', 'uaRaise', 0, 180], ['Towards', 'uaAz', 0, 90, { 0: 'front', 90: 'side' }]],
+      presets: [['Forward', { uaAz: 0 }], ['To the side', { uaAz: 90 }], ['In between', { uaAz: 45 }]],
+      hint: 'Elevation is how far the arm is raised, whichever way. The direction is a unit vector in the chest\'s frame: forward, up and outward. Both change smoothly however the arm moves.' },
+    forearm: { label: 'Forearm', joint: 'elbow', frame: 'chest',
+      angle: ['elbow flexion', ps => ps.elBend], vec: 'fa', sweep: 'elBend', range: [0, 150],
+      ctl: [['Bend', 'elBend', 0, 150], ['Twist', 'elTwist', -90, 90, { 0: 'none' }]],
+      presets: [['Arm down', { uaRaise: 5, uaAz: 60 }], ['Arm forward', { uaRaise: 90, uaAz: 0 }], ['Arm to the side', { uaRaise: 90, uaAz: 90 }]],
+      hint: 'Elbow flexion is how far the elbow is bent. The forearm\'s direction, also in the chest\'s frame, adds what the angle cannot: twisting the upper arm swings the forearm round while the elbow angle stays the same.' },
+    thigh: { label: 'Thigh', joint: 'hip', frame: 'pelvis',
+      angle: ['hip elevation', ps => ps.thRaise], vec: 'th', sweep: 'thRaise', range: [0, 120],
+      ctl: [['Raise', 'thRaise', 0, 120], ['Towards', 'thAz', 0, 60, { 0: 'front' }]],
+      presets: [['Forward', { thAz: 0 }], ['Out to the side', { thAz: 60 }]],
+      hint: 'Hip elevation is how far the thigh is raised from hanging. The direction is a unit vector in the pelvis\'s frame, so it reads the same whichever way the person faces.' },
+    shank: { label: 'Shank', joint: 'knee', frame: 'pelvis',
+      angle: ['knee flexion', ps => ps.knBend], vec: 'sh', sweep: 'knBend', range: [0, 150],
+      ctl: [['Bend', 'knBend', 0, 150]],
+      presets: [['Standing', { thRaise: 0 }], ['Sitting', { thRaise: 90, thAz: 0 }]],
+      hint: 'Knee flexion is how far the knee is bent. The shank\'s direction in the pelvis\'s frame tells sitting from standing even at the same knee angle.' },
+  };
+  let cur = 'upper_arm';
+  const armBones = $('#armBones'), armCtl = $('#armCtl');
+  Object.entries(LIMB).forEach(([k, L]) => {
+    const b = el('button', { type: 'button', role: 'tab' }, `${L.label} <small>(${L.joint})</small>`);
+    b.addEventListener('click', () => setLimb(k));
+    armBones.append(b);
+  });
+  function setLimb(k) {
+    cur = k; const L = LIMB[k];
+    $$('button', armBones).forEach((b, i) => b.classList.toggle('on', Object.keys(LIMB)[i] === k));
+    armCtl.innerHTML = '';
+    L.ctl.forEach(([name, key, lo, hi, words]) => {
+      const lab = el('label', {}, `${name} <input type="range" min="${lo}" max="${hi}" value="${pose[key]}"><output></output>`);
+      const inp = $('input', lab), out = $('output', lab);
+      const show = () => { out.textContent = (words && words[inp.value]) || inp.value + '°'; };
+      inp.addEventListener('input', () => { pose[key] = +inp.value; show(); limbUpdate(); });
+      show(); armCtl.append(lab);
+    });
+    const pr = el('div', { class: 'presets' });
+    L.presets.forEach(([name, set]) => {
+      const b = el('button', { type: 'button' }, name);
+      b.addEventListener('click', () => { Object.assign(pose, set); setLimb(cur); });
+      pr.append(b);
+    });
+    armCtl.append(pr);
+    $('#armTitle').textContent = `Right ${L.label.toLowerCase()}, as the model sees it`;
+    $('#armHint').textContent = L.hint;
+    limbUpdate();
   }
   function fit(c) {
-    const dpr = devicePixelRatio || 1, w = c.clientWidth, h = Math.round(w * c.height / c.width);
+    const dpr = devicePixelRatio || 1, w = c.clientWidth, h = Math.round(w * c._ratio);
     if (c._w !== w) { c._w = w; c._h = h; c.width = w * dpr; c.height = h * dpr; c.style.height = h + 'px'; }
     const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
     return [g, c._w, c._h];
   }
-  armC.width = 520; armC.height = 440; plotC.width = 560; plotC.height = 300;
+  armC._ratio = 440 / 520; plotC._ratio = 300 / 560;
   function project(p, cx, cy, s, yw, pt) {
     // humanml3d (x the person's left, y up, z forward), camera in front: screen x = x
     let [x, y, z] = p;
@@ -314,87 +382,85 @@
     [y, z] = [y * cp - z * sp, y * sp + z * cp];
     return [cx + x * s, cy - y * s, z];
   }
-  function drawArm() {
+  const world = d => [-d[2], d[1], d[0]];        // right side: outward = -x
+  function drawFigure() {
     const [g, w, h] = fit(armC);
     g.clearRect(0, 0, w, h);
-    const r = +raise.value, a = +az.value, d = dirOf(r, a);
-    const world = [-d[2], d[1], d[0]];             // right arm: outward = -x
-    const sh = [-.18, 1.42, 0];
-    const el_ = sh.map((v, i) => v + .29 * world[i]), wr = el_.map((v, i) => v + .26 * world[i]);
-    const s = h / 2.05, cx = w / 2, cy = h * .93;
-    const pr = p => project([p[0], p[1] - .02, p[2]], cx, cy, s, yaw, pitch);
-    // floor
+    const L = limbs(pose);
+    const J = { pel: [0, .95, 0], lhip: [.09, .87, 0], rhip: [-.09, .87, 0], neck: [0, 1.47, 0], head: [0, 1.66, .02],
+      lsh: [.18, 1.42, 0], rsh: [-.18, 1.42, 0], lel: [.21, 1.14, 0], lwr: [.22, .88, .03],
+      lkn: [.10, .48, .02], lan: [.10, .08, 0], lft: [.12, .02, .13] };
+    J.rel = add(J.rsh, world(L.ua), .29); J.rwr = add(J.rel, world(L.fa), .26);
+    J.rkn = add(J.rhip, world(L.th), .40); J.ran = add(J.rkn, world(L.sh), .40);
+    J.rft = add(J.ran, world(norm(add(cross(OUT, L.sh), L.sh, .3))), .13);
+    const fr = Math.min(...Object.values(J).map(p => p[1]));
+    const s = h / 2.1, cx = w / 2, cy = h * .94;
+    const pr = p => project([p[0], p[1] - Math.min(0, fr) - .02, p[2]], cx, cy, s, yaw, pitch);
     g.strokeStyle = css('--line'); g.lineWidth = 1;
     for (let k = -3; k <= 3; k++) {
       const a1 = pr([k * .15, 0, -.45]), a2 = pr([k * .15, 0, .45]), b1 = pr([-.45, 0, k * .15]), b2 = pr([.45, 0, k * .15]);
       g.beginPath(); g.moveTo(a1[0], a1[1]); g.lineTo(a2[0], a2[1]); g.moveTo(b1[0], b1[1]); g.lineTo(b2[0], b2[1]); g.stroke();
     }
     g.lineCap = 'round';
-    g.strokeStyle = css('--mute'); g.lineWidth = 5;
-    for (const [i, j] of LINKS) {
-      const p = pr(BODY[i]), q = pr(BODY[j]);
-      g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(q[0], q[1]); g.stroke();
-    }
-    const hd = pr([0, 1.66, .02]);
-    g.beginPath(); g.arc(hd[0], hd[1], s * .075, 0, 7); g.stroke();
-    // hanging reference, dashed
-    const hang = pr([sh[0], sh[1] - .55, sh[2]]), S = pr(sh);
-    g.setLineDash([5, 6]); g.lineWidth = 2; g.strokeStyle = css('--mute');
-    g.beginPath(); g.moveTo(S[0], S[1]); g.lineTo(hang[0], hang[1]); g.stroke(); g.setLineDash([]);
-    // the arm
-    const E = pr(el_), W = pr(wr);
-    g.strokeStyle = css('--acc'); g.lineWidth = 8;
-    g.beginPath(); g.moveTo(S[0], S[1]); g.lineTo(E[0], E[1]); g.stroke();
-    g.globalAlpha = .55; g.lineWidth = 6;
-    g.beginPath(); g.moveTo(E[0], E[1]); g.lineTo(W[0], W[1]); g.stroke(); g.globalAlpha = 1;
-    g.fillStyle = css('--acc');
-    [S, E].forEach(p => { g.beginPath(); g.arc(p[0], p[1], 5, 0, 7); g.fill(); });
-    g.fillStyle = css('--sub'); g.font = '600 13px Inter, sans-serif';
-    g.fillText('drag to turn', 12, 22);
+    const seg = (a, b, col, wd, dash) => {
+      const p = pr(a), q = pr(b); g.strokeStyle = col; g.lineWidth = wd; g.setLineDash(dash || []);
+      g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(q[0], q[1]); g.stroke(); g.setLineDash([]);
+    };
+    const mute = css('--mute'), acc = css('--acc');
+    [['pel', 'lhip'], ['pel', 'rhip'], ['pel', 'neck'], ['neck', 'lsh'], ['neck', 'rsh'], ['lsh', 'lel'], ['lel', 'lwr'],
+     ['lhip', 'lkn'], ['lkn', 'lan'], ['lan', 'lft'], ['ran', 'rft']].forEach(([a, b]) => seg(J[a], J[b], mute, 5));
+    const hd = pr(J.head); g.strokeStyle = mute; g.lineWidth = 5; g.beginPath(); g.arc(hd[0], hd[1], s * .075, 0, 7); g.stroke();
+    const parts = { upper_arm: ['rsh', 'rel'], forearm: ['rel', 'rwr'], thigh: ['rhip', 'rkn'], shank: ['rkn', 'ran'] };
+    // the parent bone's line continued: where the bone would point unbent
+    const [a, b] = parts[cur];
+    if (cur === 'upper_arm' || cur === 'thigh') seg(J[a], add(J[a], [0, -.5, 0]), mute, 2, [5, 6]);
+    else { const parent = cur === 'forearm' ? L.ua : L.th; seg(J[a], add(J[a], world(parent), .3), mute, 2, [5, 6]); }
+    for (const [k, [p, q]] of Object.entries(parts)) seg(J[p], J[q], k === cur ? acc : css('--sub'), k === cur ? 9 : 5.5);
+    g.fillStyle = acc; [J[a], J[b]].forEach(p => { const q = pr(p); g.beginPath(); g.arc(q[0], q[1], 5, 0, 7); g.fill(); });
+    g.fillStyle = css('--sub'); g.font = '600 13px Inter, sans-serif'; g.fillText('drag to turn', 12, 22);
   }
   function drawPlot() {
     const [g, w, h] = fit(plotC);
     g.clearRect(0, 0, w, h);
-    const a = +az.value, r = +raise.value;
+    const Lm = LIMB[cur], [lo, hi] = Lm.range, x0 = pose[Lm.sweep];
+    const at = v => limbs({ ...pose, [Lm.sweep]: v })[Lm.vec];
     const L = 44, R = w - 14, top1 = 14, bot1 = h * .40, top2 = h * .52, bot2 = h - 26;
-    const X = v => L + (R - L) * v / 180;
+    const X = v => L + (R - L) * (v - lo) / (hi - lo);
+    const Ya = v => bot1 - (bot1 - top1) * v / 180, Yd = v => bot2 - (bot2 - top2) * (v + 1) / 2;
     g.font = '12px Inter, sans-serif'; g.fillStyle = css('--sub'); g.strokeStyle = css('--line'); g.lineWidth = 1;
-    // grids
-    [[top1, bot1, [0, 90, 180], v => bot1 - (bot1 - top1) * v / 180, '°'], [top2, bot2, [-1, 0, 1], v => bot2 - (bot2 - top2) * (v + 1) / 2, '']]
-      .forEach(([t, b, ticks, f, u]) => ticks.forEach(v => {
-        const y = f(v); g.beginPath(); g.moveTo(L, y); g.lineTo(R, y); g.stroke();
-        g.textAlign = 'right'; g.fillText(v + u, L - 6, y + 4);
-      }));
+    [[0, 90, 180], [-1, 0, 1]].forEach((ticks, j) => ticks.forEach(v => {
+      const y = j ? Yd(v) : Ya(v); g.beginPath(); g.moveTo(L, y); g.lineTo(R, y); g.stroke();
+      g.textAlign = 'right'; g.fillText(v + (j ? '' : '°'), L - 6, y + 4);
+    }));
     g.textAlign = 'center';
-    [0, 45, 90, 135, 180].forEach(v => g.fillText(v + '°', X(v), h - 8));
+    const stepT = hi - lo === 180 ? 45 : 30;
+    for (let v = lo; v <= hi + 1e-6; v += stepT) g.fillText(Math.round(v) + '°', X(v), h - 8);
     const series = [
-      ['elevation', css('--ink'), k => bot1 - (bot1 - top1) * k / 180, k => k],
-      ['forward', '#0b84c6', k => bot2 - (bot2 - top2) * (dirOf(k, a)[0] + 1) / 2, k => dirOf(k, a)[0]],
-      ['up', '#3f8f5b', k => bot2 - (bot2 - top2) * (dirOf(k, a)[1] + 1) / 2, k => dirOf(k, a)[1]],
-      ['outward', '#e07b39', k => bot2 - (bot2 - top2) * (dirOf(k, a)[2] + 1) / 2, k => dirOf(k, a)[2]],
+      [Lm.angle[0], css('--ink'), v => Ya(v), v => v],
+      ['forward', '#0b84c6', v => Yd(at(v)[0]), v => at(v)[0]],
+      ['up', '#3f8f5b', v => Yd(at(v)[1]), v => at(v)[1]],
+      ['outward', '#e07b39', v => Yd(at(v)[2]), v => at(v)[2]],
     ];
     g.lineWidth = 2.4;
     for (const [, col, f] of series) {
       g.strokeStyle = col; g.beginPath();
-      for (let k = 0; k <= 180; k += 2) { const y = f(k); k ? g.lineTo(X(k), y) : g.moveTo(X(k), y); }
+      for (let k = 0; k <= 90; k++) { const v = lo + (hi - lo) * k / 90, y = f(v); k ? g.lineTo(X(v), y) : g.moveTo(X(v), y); }
       g.stroke();
     }
     g.strokeStyle = css('--pred'); g.lineWidth = 1.5; g.setLineDash([4, 4]);
-    g.beginPath(); g.moveTo(X(r), top1); g.lineTo(X(r), bot2); g.stroke(); g.setLineDash([]);
-    for (const [, col, f] of series) { g.fillStyle = col; g.beginPath(); g.arc(X(r), f(r), 4.5, 0, 7); g.fill(); }
-    g.fillStyle = css('--sub'); g.textAlign = 'left';
-    g.fillText('elevation', L + 6, top1 + 12); g.fillText('direction', L + 6, top2 + 12);
-    $('#armRead').innerHTML = series.map(([n, col, , v]) =>
-      `<span><i style="background:${col}"></i>${n} ${n === 'elevation' ? v(r).toFixed(0) + '°' : v(r).toFixed(2)}</span>`).join('');
+    g.beginPath(); g.moveTo(X(x0), top1); g.lineTo(X(x0), bot2); g.stroke(); g.setLineDash([]);
+    for (const [, col, f] of series) { g.fillStyle = col; g.beginPath(); g.arc(X(x0), f(x0), 4.5, 0, 7); g.fill(); }
+    g.textAlign = 'left';
+    const tag = (t, y) => {            // a label on a backing, so curves do not run through it
+      const tw = g.measureText(t).width;
+      g.fillStyle = css('--card'); g.globalAlpha = .85; g.fillRect(L + 3, y - 11, tw + 8, 15); g.globalAlpha = 1;
+      g.fillStyle = css('--sub'); g.fillText(t, L + 7, y);
+    };
+    tag(Lm.angle[0], top1 + 12); tag(`${Lm.label.toLowerCase()} direction (${Lm.frame} frame)`, top2 + 12);
+    $('#armRead').innerHTML = series.map(([n, col, , v], i) =>
+      `<span><i style="background:${col}"></i>${n} ${i ? v(x0).toFixed(2) : v(x0).toFixed(0) + '°'}</span>`).join('');
   }
-  function armUpdate() {
-    $('#armRaiseV').textContent = raise.value + '°';
-    $('#armAzV').textContent = { 0: 'front', 90: 'side' }[az.value] || az.value + '°';
-    $$('.presets button').forEach(b => b.classList.toggle('on', b.dataset.az === az.value));
-    drawArm(); drawPlot();
-  }
-  raise.addEventListener('input', armUpdate); az.addEventListener('input', armUpdate);
-  $$('.presets button').forEach(b => b.addEventListener('click', () => { az.value = b.dataset.az; armUpdate(); }));
+  function limbUpdate() { drawFigure(); drawPlot(); }
   function draggable(c, get, set, after) {
     let start = null;
     c.addEventListener('pointerdown', e => { start = [e.clientX, e.clientY, ...get()]; c.setPointerCapture(e.pointerId); });
@@ -406,10 +472,12 @@
     c.addEventListener('pointerup', () => start = null);
     c.addEventListener('pointercancel', () => start = null);
   }
-  draggable(armC, () => [yaw, pitch], (y, p) => { yaw = y; pitch = p; }, drawArm);
-  addEventListener('resize', armUpdate);
-  redrawers.push(armUpdate);
-  armUpdate();
+  draggable(armC, () => [yaw, pitch], (y, p) => { yaw = y; pitch = p; }, drawFigure);
+  addEventListener('resize', limbUpdate);
+  redrawers.push(limbUpdate);
+  setLimb('upper_arm');
+  // picking an arm or leg bone above shows it here
+  showLimbFor = name => { const k = name.replace(/^(left|right)_/, ''); if (LIMB[k]) setLimb(k); };
 
   /* ----------------------------------------------------------------- demo */
   const dv = $('#demoV'), dc = $('#demoC'), slider = $('#demoSlider'), playB = $('#demoPlay'), ghostT = $('#demoGhost');
