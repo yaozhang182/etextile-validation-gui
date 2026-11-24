@@ -19,7 +19,7 @@ external/BodyPoseEstimation/
 # The repository is the software. These are our own working materials and stay
 # local: the manuscript, the submission bundle (which includes confidential peer
 # review), and internal planning notes.
-paper/
+/paper/
 paper_template/
 project_plan/
 # Recordings shared by other users for checking; their data, not ours to publish.
